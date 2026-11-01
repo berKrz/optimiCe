@@ -1,0 +1,26 @@
+BasedOnStyle: Google
+UseTab: Always
+TabWidth: 2
+ColumnLimit: 100
+DerivePointerAlignment: false
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AlignConsecutiveAssignments:
+  Enabled: true
+  AlignCompound: true
+  PadOperators: true
+AlignConsecutiveDeclarations:
+  Enabled: true
+AlignConsecutiveMacros:
+  Enabled: true
+AlignArrayOfStructures: Left
+SpaceAfterCStyleCast: true
+BreakBeforeTernaryOperators: false
+BreakStringLiterals: false
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<.*>'
+    Priority: 1
+  - Regex: '^".*"'
+    Priority: 2
+InsertNewlineAtEOF: true

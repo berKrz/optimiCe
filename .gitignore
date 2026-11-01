@@ -1,0 +1,10 @@
+*.o
+optimice
+
+.clangd/
+.cache/
+
+.direnv/
+.envrc
+
+compile_commands.json
