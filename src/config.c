@@ -7,13 +7,22 @@
 #include "algorithms.h"
 #include "common.h"
 
+// Tracks whether `algorithm = ...` has been seen in the current parse.
+// Flipped by apply_algorithm; read by apply_field to enforce
+// "algorithm must be the first non-comment key, and must appear exactly once".
+// _Thread_local so parallel runs in Step 3 don't share this state.
+static _Thread_local int algorithm_seen = 0;
+
 // --- Handlers ---
 
 static void apply_algorithm(const char* source, const char* key, const char* val) {
+  if (algorithm_seen) die_at(source, key, "'algorithm' já foi definido");
+
   for (int i = 0; algorithms[i].name; i++) {
     if (strcmp(val, algorithms[i].name) == 0) {
       g_cfg.algorithm = &algorithms[i];
       set_defaults_from_table(algorithms[i].fields);
+      algorithm_seen = 1;
       return;
     }
   }
@@ -22,9 +31,9 @@ static void apply_algorithm(const char* source, const char* key, const char* val
 
 static void apply_seed(const char* source, const char* key, const char* val) {
   char* end;
-  errno      = 0;
-  uint64_t v = strtoull(val, &end, 0);
-  if (*val == '\0' || *end != '\0' || errno == ERANGE)
+  errno           = 0;
+  unsigned long v = strtoul(val, &end, 0);
+  if (*val == '\0' || *end != '\0' || errno == ERANGE || v > UINT32_MAX)
     die_at(source, key, "deve ser um inteiro sem sinal");
   rng_init_with(v);
 }
@@ -129,7 +138,7 @@ void apply_field(const char* source, const char* key, const char* val) {
     }
   }
 
-  if (!g_cfg.algorithm) die_at(source, key, "defina 'algorithm' antes de outros campos");
+  if (!algorithm_seen) die_at(source, key, "'algorithm' deve ser a primeira chave do arquivo");
 
   const FieldSpec* tbl = g_cfg.algorithm->fields;
   for (int i = 0; tbl[i].name; i++) {
@@ -142,18 +151,56 @@ void apply_field(const char* source, const char* key, const char* val) {
   die_at(source, key, "chave desconhecida para o algoritmo selecionado");
 }
 
+// --- Validation ---
+
+// Reverse lookup: FitnessEntry for the fn pointer currently in g_cfg.
+// Called once per run from validate() and dump_config_fn(); cold-path cost.
+static const FitnessEntry* fitness_entry_for(double (*fn)(const double*)) {
+  for (int i = 0; fitness_table[i].name; i++)
+    if (fitness_table[i].fn == fn) return &fitness_table[i];
+  return NULL;  // apply_fitness guarantees a match; unreachable
+}
+
+void validate(void) {
+  if (g_cfg.domain_min >= g_cfg.domain_max)
+    die("domain_min deve ser estritamente menor que domain_max");
+
+  const FitnessEntry* fe = fitness_entry_for(g_cfg.fitness_fn);
+  char                msg[256];
+
+  if (fe->n_dims_min && g_cfg.n_dims < fe->n_dims_min) {
+    snprintf(msg, sizeof(msg), "para %s, n_dims deve ser pelo menos %d (atual: %d)", fe->name,
+             fe->n_dims_min, g_cfg.n_dims);
+    die(msg);
+  }
+  if (fe->n_dims_max && g_cfg.n_dims > fe->n_dims_max) {
+    snprintf(msg, sizeof(msg), "para %s, n_dims deve ser no máximo %d (atual: %d)", fe->name,
+             fe->n_dims_max, g_cfg.n_dims);
+    die(msg);
+  }
+  if (g_cfg.domain_min < fe->domain_lo || g_cfg.domain_max > fe->domain_hi) {
+    snprintf(msg, sizeof(msg), "para %s, o domínio deve estar contido em [%g, %g]", fe->name,
+             fe->domain_lo, fe->domain_hi);
+    die(msg);
+  }
+
+  if (g_cfg.algorithm->validate) g_cfg.algorithm->validate();
+}
+
 // --- Dump ---
 
 void dump_config_fn(void) {
+  const FitnessEntry* fe = fitness_entry_for(g_cfg.fitness_fn);
+
   printf("# resolved g_cfg\n");
   printf("algorithm   = %s\n", g_cfg.algorithm ? g_cfg.algorithm->name : "(unset)");
-  printf("seed        = 0x%016lx\n", (unsigned long) g_cfg.seed);
+  printf("seed = 0x%08x\n", g_cfg.seed);
   printf("direction   = %s\n", g_cfg.direction == MINIMIZE ? "minimize" : "maximize");
   printf("n_dims      = %d\n", g_cfg.n_dims);
   printf("domain_min  = %g\n", g_cfg.domain_min);
   printf("domain_max  = %g\n", g_cfg.domain_max);
   printf("interactive = %s\n", g_cfg.interactive ? "true" : "false");
-  printf("fitness     = <fn-ptr>\n");
+  printf("fitness     = %s\n", fe ? fe->name : "(unknown)");
 
   if (!g_cfg.algorithm) return;
   printf("\n# %s arm\n", g_cfg.algorithm->name);

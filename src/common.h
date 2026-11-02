@@ -6,7 +6,6 @@ typedef struct Algorithm Algorithm;  // defined in algorithms.h
 typedef struct FieldSpec FieldSpec;  // defined in algorithms.h
 
 typedef enum { MINIMIZE, MAXIMIZE } OptDirection;
-typedef enum { ALGO_GA, ALGO_PSO } AlgorithmKind;
 typedef enum { PBEST_POSITION, PBEST_RANDOM } PbestInit;
 
 typedef struct {
@@ -23,7 +22,7 @@ typedef struct {
 } PsoConfig;
 
 typedef struct {
-  uint64_t     seed;
+  uint32_t     seed;
   OptDirection direction;
   int          n_dims;
   double       domain_min;
@@ -53,17 +52,16 @@ void print_separator(void);
 void print_iteration_header(int iter);
 
 // rng.c
-void   rng_init_with(uint64_t seed);
+void   rng_init_with(uint32_t seed);
 void   rng_init_auto(void);
 double rng_next_double(void);
 double rng_next_double_range(double lo, double hi);
-int    rng_next_int(int lo, int hi);
+int    rng_next_int(int lo, int hi);  // half-open: [lo, hi)
 int    rng_next_bit(void);
 
 // config.c
-void config_set_common_defaults(void);
 void apply_field(const char* source, const char* key, const char* val);
-void apply_field(const char* source, const char* key, const char* val);
+void validate(void);
 void dump_config_fn(void);
 
 // ini.c
@@ -85,6 +83,11 @@ double schaffer_f6(const double* pos);
 typedef struct FitnessEntry {
   const char* name;
   double (*fn)(const double*);
+  // n_dims_min == n_dims_max for fixed dimension functions
+  int    n_dims_min;  // 0 = unbounded below
+  int    n_dims_max;  // 0 = unbounded above
+  double domain_lo;   // -INFINITY = unbounded below
+  double domain_hi;   //  INFINITY = unbounded above
 } FitnessEntry;
 
 extern const FitnessEntry fitness_table[];

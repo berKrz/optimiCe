@@ -6,7 +6,7 @@
 
 // Apply_seed calls rng_init_with during INI parsing;
 // Parse_args calls rng_init_auto afterwards as the fallback.
-static void rng_commit(uint64_t seed) {
+static void rng_commit(uint32_t seed) {
   static int called = 0;
   if (called) return;
   called     = 1;
@@ -14,9 +14,9 @@ static void rng_commit(uint64_t seed) {
   srand((unsigned int) seed);
 }
 
-void rng_init_with(uint64_t seed) { rng_commit(seed); }
+void rng_init_with(uint32_t seed) { rng_commit(seed); }
 
-void rng_init_auto(void) { rng_commit((uint64_t) time(NULL) ^ (uint64_t) getpid()); }
+void rng_init_auto(void) { rng_commit((uint32_t) time(NULL) ^ (uint32_t) getpid()); }
 
 double rng_next_double(void) { return (double) rand() / ((double) RAND_MAX + 1.0); }
 

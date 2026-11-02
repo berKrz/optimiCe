@@ -23,8 +23,8 @@ typedef struct FieldSpec {
 
 typedef struct Algorithm {
   const char*      name;
-  AlgorithmKind    kind;
   const FieldSpec* fields;
+  void (*validate)(void);
   void (*run)(void);
 } Algorithm;
 

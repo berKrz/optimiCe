@@ -69,7 +69,12 @@ void parse_args(int argc, char** argv) {
       case 'D': dump_config = 1; break;
       case 'h':
       case 'H': want_help = 1; break;
-      default:  die("opção inválida");
+
+      default: {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "opção inválida: -%c", optopt);
+        die(msg);
+      }
     }
   }
 
@@ -83,6 +88,7 @@ void parse_args(int argc, char** argv) {
   if (!config_path) die("--config / -f é obrigatório");
 
   parse_ini(config_path);
+  validate();
   rng_init_auto();
 
   if (dump_config) {
