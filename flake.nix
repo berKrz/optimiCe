@@ -14,6 +14,7 @@
           gcc
           clang-tools
           gdb
+          bear
         ];
       };
 

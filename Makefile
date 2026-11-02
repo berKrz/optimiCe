@@ -1,10 +1,18 @@
 CC     = gcc
-CFLAGS = -Wall -Wextra -std=c11 -g -D_GNU_SOURCE
+CFLAGS = -Wall -Wextra -std=c11 -I$(SRCDIR) -g -D_GNU_SOURCE \
+				 -finput-charset=UTF-8 -fexec-charset=UTF-8
 LDLIBS = -lm
 
 TARGET = optimice
 SRCDIR = src
-SRC    = $(SRCDIR)/main.c
+SRC    = $(SRCDIR)/main.c \
+         $(SRCDIR)/utils.c \
+         $(SRCDIR)/rng.c \
+         $(SRCDIR)/fitness.c \
+         $(SRCDIR)/config.c \
+         $(SRCDIR)/ini.c \
+         $(SRCDIR)/args.c \
+         $(SRCDIR)/algorithms/pso.c
 OBJ    = $(SRC:.c=.o)
 
 all: $(TARGET)
