@@ -6,7 +6,7 @@
 _Thread_local Config g_cfg;
 
 const Algorithm algorithms[] = {
-    {.name = "pso", .fields = pso_fields, .run = pso_run},
+    {.name = "pso", .fields = pso_fields, .dump = pso_dump, .run = pso_run},
     {0},
 };
 

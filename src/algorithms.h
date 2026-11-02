@@ -25,6 +25,7 @@ typedef struct Algorithm {
   const char*      name;
   const FieldSpec* fields;
   void (*validate)(void);
+  void (*dump)(void);
   void (*run)(void);
 } Algorithm;
 
@@ -39,4 +40,6 @@ extern const FieldSpec common_fields[];
 
 // PSO
 extern const FieldSpec pso_fields[];
-void                   pso_run(void);
+
+void pso_run(void);
+void pso_dump(void);

@@ -195,7 +195,7 @@ void dump_config_fn(void) {
 
   printf("# resolved g_cfg\n");
   printf("algorithm   = %s\n", g_cfg.algorithm ? g_cfg.algorithm->name : "(unset)");
-  printf("seed = 0x%08x\n", g_cfg.seed);
+  printf("seed        = 0x%08x\n", g_cfg.seed);
   printf("direction   = %s\n", g_cfg.direction == MINIMIZE ? "minimize" : "maximize");
   printf("n_dims      = %d\n", g_cfg.n_dims);
   printf("domain_min  = %g\n", g_cfg.domain_min);
@@ -205,4 +205,5 @@ void dump_config_fn(void) {
 
   if (!g_cfg.algorithm) return;
   printf("\n# %s arm\n", g_cfg.algorithm->name);
+  if (g_cfg.algorithm->dump) g_cfg.algorithm->dump();  // defensive
 }

@@ -50,6 +50,8 @@ void clear_screen(void);
 void wait_for_enter(void);
 void print_separator(void);
 void print_iteration_header(int iter);
+void print_iteration_line(int iter, double best_fitness);
+void print_result(const double* best_pos, double best_fitness);
 
 // rng.c
 void   rng_init_with(uint32_t seed);
