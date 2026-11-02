@@ -6,7 +6,7 @@
 // config file, and feeds the --help printer and future validators.
 typedef enum {
   FIELD_INT,
-  FIELD_UINT64,
+  FIELD_UINT,
   FIELD_DOUBLE,
   FIELD_BOOL,
   FIELD_ENUM,

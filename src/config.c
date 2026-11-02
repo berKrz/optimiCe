@@ -85,7 +85,7 @@ static void apply_fitness(const char* source, const char* key, const char* val) 
 
 const FieldSpec common_fields[] = {
     {"algorithm",  FIELD_ENUM,   NULL,       "Algoritmo a executar: pso | ga",    apply_algorithm },
-    {"seed",       FIELD_UINT64, NULL,       "Semente do RNG (ausente → gerada)", apply_seed      },
+    {"seed",       FIELD_UINT,   NULL,       "Semente do RNG (ausente → gerada)", apply_seed      },
     {"direction",  FIELD_ENUM,   "minimize", "Sentido: minimize | maximize",      apply_direction },
     {"n_dims",     FIELD_INT,    "2",        "Número de dimensões",               apply_n_dims    },
     {"domain_min", FIELD_DOUBLE, "-5.0",     "Limite inferior do domínio",        apply_domain_min},
@@ -105,7 +105,7 @@ void set_defaults_from_table(const FieldSpec* table) {
 static const char* field_type_name(FieldType t) {
   switch (t) {
     case FIELD_INT:    return "int";
-    case FIELD_UINT64: return "uint64";
+    case FIELD_UINT:   return "uint64";
     case FIELD_DOUBLE: return "float";
     case FIELD_BOOL:   return "bool";
     case FIELD_ENUM:   return "enum";
@@ -166,7 +166,8 @@ void validate(void) {
     die("domain_min deve ser estritamente menor que domain_max");
 
   const FitnessEntry* fe = fitness_entry_for(g_cfg.fitness_fn);
-  char                msg[256];
+  if (!fe) die("função de aptidão não encontrada no catálogo");
+  char msg[256];
 
   if (fe->n_dims_min && g_cfg.n_dims < fe->n_dims_min) {
     snprintf(msg, sizeof(msg), "para %s, n_dims deve ser pelo menos %d (atual: %d)", fe->name,
