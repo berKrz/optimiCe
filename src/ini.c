@@ -18,7 +18,7 @@ void parse_ini(const char* filename) {
   FILE* f = fopen(filename, "r");
   if (!f) {
     char msg[256];
-    snprintf(msg, sizeof(msg), "não foi possível abrir '%s': %s", filename, strerror(errno));
+    snprintf(msg, sizeof(msg), "could not open '%s': %s", filename, strerror(errno));
     die(msg);
   }
 
@@ -34,7 +34,7 @@ void parse_ini(const char* filename) {
     char  source[128];
     snprintf(source, sizeof(source), "%s:%d", filename, linenum);
 
-    if (!eq) die_at(source, NULL, "formato esperado: 'chave = valor'");
+    if (!eq) die_at(source, NULL, "expected format: 'key = value'");
 
     *eq       = '\0';
     char* key = trim(s);

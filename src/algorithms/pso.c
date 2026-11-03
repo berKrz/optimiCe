@@ -15,7 +15,7 @@ static void apply_swarm_size(const char* source, const char* key, const char* va
   errno  = 0;
   long v = strtol(val, &end, 10);
   if (*val == '\0' || *end != '\0' || errno == ERANGE || v <= 0 || v > INT_MAX)
-    die_at(source, key, "deve ser um inteiro positivo");
+    die_at(source, key, "must be a positive integer");
   g_cfg.pso.swarm_size = (int) v;
 }
 
@@ -24,7 +24,7 @@ static void apply_iterations(const char* source, const char* key, const char* va
   errno  = 0;
   long v = strtol(val, &end, 10);
   if (*val == '\0' || *end != '\0' || errno == ERANGE || v <= 0 || v > INT_MAX)
-    die_at(source, key, "deve ser um inteiro positivo");
+    die_at(source, key, "must be a positive integer");
   g_cfg.pso.iterations = (int) v;
 }
 
@@ -33,7 +33,7 @@ static void apply_w(const char* source, const char* key, const char* val) {
   errno    = 0;
   double v = strtod(val, &end);
   if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 0.0)
-    die_at(source, key, "deve ser um número não-negativo");
+    die_at(source, key, "must be a non-negative number");
   g_cfg.pso.w = v;
 }
 
@@ -42,7 +42,7 @@ static void apply_c1(const char* source, const char* key, const char* val) {
   errno    = 0;
   double v = strtod(val, &end);
   if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 0.0)
-    die_at(source, key, "deve ser um número não-negativo");
+    die_at(source, key, "must be a non-negative number");
   g_cfg.pso.c1 = v;
 }
 
@@ -51,25 +51,25 @@ static void apply_c2(const char* source, const char* key, const char* val) {
   errno    = 0;
   double v = strtod(val, &end);
   if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 0.0)
-    die_at(source, key, "deve ser um número não-negativo");
+    die_at(source, key, "must be a non-negative number");
   g_cfg.pso.c2 = v;
 }
 
 static void apply_pbest_init(const char* source, const char* key, const char* val) {
   if (strcmp(val, "position") == 0) g_cfg.pso.pbest_init = PBEST_POSITION;
   else if (strcmp(val, "random") == 0) g_cfg.pso.pbest_init = PBEST_RANDOM;
-  else die_at(source, key, "deve ser 'position' ou 'random'");
+  else die_at(source, key, "must be 'position' or 'random'");
 }
 
 // --- Field table ---
 
 const FieldSpec pso_fields[] = {
-    {"swarm_size", FIELD_INT,    "30",       "Tamanho do enxame",                  apply_swarm_size},
-    {"iterations", FIELD_INT,    "100",      "Número de iterações",                apply_iterations},
-    {"w",          FIELD_DOUBLE, "1.0",      "Peso de inércia",                    apply_w         },
-    {"c1",         FIELD_DOUBLE, "2.0",      "Coeficiente cognitivo",              apply_c1        },
-    {"c2",         FIELD_DOUBLE, "2.0",      "Coeficiente social",                 apply_c2        },
-    {"pbest_init", FIELD_ENUM,   "position", "Início do pbest: position | random", apply_pbest_init},
+    {"swarm_size", FIELD_INT,    "30",       "Swarm size",                         apply_swarm_size},
+    {"iterations", FIELD_INT,    "100",      "Number of iterations",               apply_iterations},
+    {"w",          FIELD_DOUBLE, "1.0",      "Inertia weight",                     apply_w         },
+    {"c1",         FIELD_DOUBLE, "2.0",      "Cognitive coefficient",              apply_c1        },
+    {"c2",         FIELD_DOUBLE, "2.0",      "Social coefficient",                 apply_c2        },
+    {"pbest_init", FIELD_ENUM,   "position", "pbest init: position | random",      apply_pbest_init},
     {NULL,         0,            NULL,       NULL,                                 NULL            },
 };
 
@@ -195,8 +195,8 @@ static void print_vec(const double* v) {
 static void print_particle(const Particle* p, int index, double gbest_fitness) {
   int is_gbest_holder = (p->pbest_fitness == gbest_fitness);
 
-  if (is_gbest_holder) printf(">> Partícula %2d", index);
-  else printf("   Partícula %2d", index);
+  if (is_gbest_holder) printf(">> Particle %2d", index);
+  else printf("   Particle %2d", index);
 
   if (p->pbest_updated) printf("   (*)\n");
   else printf("\n");
@@ -229,12 +229,12 @@ void pso_run(void) {
   double*   gbest_pos = malloc(n * sizeof(double));
   double    gbest_fitness;
 
-  if (!data || !swarm || !gbest_pos) die("falha na alocação de memória");
+  if (!data || !swarm || !gbest_pos) die("memory allocation failed");
 
   init_swarm(swarm, data, gbest_pos, &gbest_fitness);
 
   if (g_cfg.interactive) {
-    printf("Enxame Inicial\n\n");
+    printf("Initial Swarm\n\n");
     print_swarm(swarm, gbest_fitness);
     wait_for_enter();
     print_separator();

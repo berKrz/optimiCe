@@ -8,32 +8,32 @@
 
 static void print_help_overview(void) {
   printf(
-      "Uso: optimice -f <arquivo.ini> [opções]\n"
+      "Usage: optimice -f <file.ini> [options]\n"
       "\n"
-      "Opções:\n"
-      "  -f, --config <arquivo>  Arquivo INI de configuração (obrigatório)\n"
-      "  -i, --interactive       Pausa a cada iteração\n"
-      "  -l, --list              Lista algoritmos disponíveis\n"
-      "  -d, --dump-config       Serializa g_cfg após parse e encerra\n"
-      "  -h, --help [ALG]        Ajuda geral ou de um algoritmo específico\n"
+      "Options:\n"
+      "  -f, --config <file>     INI configuration file (required)\n"
+      "  -i, --interactive       Pause after each iteration\n"
+      "  -l, --list              List available algorithms\n"
+      "  -d, --dump-config       Serialize g_cfg after parsing and exit\n"
+      "  -h, --help [ALG]        General help, or help for a specific algorithm\n"
       "\n"
-      "Campos comuns (válidos para qualquer algoritmo):\n");
+      "Common fields (valid for any algorithm):\n");
   print_help_from_table(common_fields);
-  printf("\nAlgoritmos:\n");
+  printf("\nAlgorithms:\n");
   for (int i = 0; algorithms[i].name; i++) printf("  %s\n", algorithms[i].name);
-  printf("\nUse --help ALG para ver os campos de um algoritmo.\n");
+  printf("\nUse --help ALG to see an algorithm's fields.\n");
 }
 
 static void print_help_algorithm(const char* name) {
   for (int i = 0; algorithms[i].name; i++) {
     if (strcmp(name, algorithms[i].name) == 0) {
-      printf("Campos do algoritmo '%s' (configure via INI):\n", name);
+      printf("Fields for algorithm '%s' (configure via INI):\n", name);
       print_help_from_table(algorithms[i].fields);
       return;
     }
   }
   char msg[128];
-  snprintf(msg, sizeof(msg), "algoritmo desconhecido: '%s'", name);
+  snprintf(msg, sizeof(msg), "unknown algorithm: '%s'", name);
   die(msg);
 }
 
@@ -72,7 +72,7 @@ void parse_args(int argc, char** argv) {
 
       default: {
         char msg[64];
-        snprintf(msg, sizeof(msg), "opção inválida: -%c", optopt);
+        snprintf(msg, sizeof(msg), "invalid option: -%c", optopt);
         die(msg);
       }
     }
@@ -84,8 +84,8 @@ void parse_args(int argc, char** argv) {
     exit(EXIT_SUCCESS);
   }
 
-  if (optind < argc) die("argumento inesperado");
-  if (!config_path) die("--config / -f é obrigatório");
+  if (optind < argc) die("unexpected argument");
+  if (!config_path) die("--config / -f is required");
 
   parse_ini(config_path);
   validate();

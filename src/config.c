@@ -16,7 +16,7 @@ static _Thread_local int algorithm_seen = 0;
 // --- Handlers ---
 
 static void apply_algorithm(const char* source, const char* key, const char* val) {
-  if (algorithm_seen) die_at(source, key, "'algorithm' já foi definido");
+  if (algorithm_seen) die_at(source, key, "'algorithm' was already set");
 
   for (int i = 0; algorithms[i].name; i++) {
     if (strcmp(val, algorithms[i].name) == 0) {
@@ -26,7 +26,7 @@ static void apply_algorithm(const char* source, const char* key, const char* val
       return;
     }
   }
-  die_at(source, key, "algoritmo desconhecido");
+  die_at(source, key, "unknown algorithm");
 }
 
 static void apply_seed(const char* source, const char* key, const char* val) {
@@ -34,14 +34,14 @@ static void apply_seed(const char* source, const char* key, const char* val) {
   errno           = 0;
   unsigned long v = strtoul(val, &end, 0);
   if (*val == '\0' || *end != '\0' || errno == ERANGE || v > UINT32_MAX)
-    die_at(source, key, "deve ser um inteiro sem sinal");
+    die_at(source, key, "must be an unsigned integer");
   rng_init_with(v);
 }
 
 static void apply_direction(const char* source, const char* key, const char* val) {
   if (strcmp(val, "minimize") == 0) g_cfg.direction = MINIMIZE;
   else if (strcmp(val, "maximize") == 0) g_cfg.direction = MAXIMIZE;
-  else die_at(source, key, "deve ser 'minimize' ou 'maximize'");
+  else die_at(source, key, "must be 'minimize' or 'maximize'");
 }
 
 static void apply_n_dims(const char* source, const char* key, const char* val) {
@@ -49,7 +49,7 @@ static void apply_n_dims(const char* source, const char* key, const char* val) {
   errno  = 0;
   long v = strtol(val, &end, 10);
   if (*val == '\0' || *end != '\0' || errno == ERANGE || v <= 0 || v > INT_MAX)
-    die_at(source, key, "deve ser um inteiro positivo");
+    die_at(source, key, "must be a positive integer");
   g_cfg.n_dims = (int) v;
 }
 
@@ -58,7 +58,7 @@ static void apply_domain_min(const char* source, const char* key, const char* va
   errno    = 0;
   double v = strtod(val, &end);
   if (*val == '\0' || *end != '\0' || errno == ERANGE)
-    die_at(source, key, "deve ser um número de ponto flutuante");
+    die_at(source, key, "must be a floating-point number");
   g_cfg.domain_min = v;
 }
 
@@ -67,7 +67,7 @@ static void apply_domain_max(const char* source, const char* key, const char* va
   errno    = 0;
   double v = strtod(val, &end);
   if (*val == '\0' || *end != '\0' || errno == ERANGE)
-    die_at(source, key, "deve ser um número de ponto flutuante");
+    die_at(source, key, "must be a floating-point number");
   g_cfg.domain_max = v;
 }
 
@@ -78,19 +78,19 @@ static void apply_fitness(const char* source, const char* key, const char* val) 
       return;
     }
   }
-  die_at(source, key, "função de aptidão desconhecida");
+  die_at(source, key, "unknown fitness function");
 }
 
 // --- Common field table ---
 
 const FieldSpec common_fields[] = {
-    {"algorithm",  FIELD_ENUM,   NULL,       "Algoritmo a executar: pso | ga",    apply_algorithm },
-    {"seed",       FIELD_UINT,   NULL,       "Semente do RNG (ausente → gerada)", apply_seed      },
-    {"direction",  FIELD_ENUM,   "minimize", "Sentido: minimize | maximize",      apply_direction },
-    {"n_dims",     FIELD_INT,    "2",        "Número de dimensões",               apply_n_dims    },
-    {"domain_min", FIELD_DOUBLE, "-5.0",     "Limite inferior do domínio",        apply_domain_min},
-    {"domain_max", FIELD_DOUBLE, "5.0",      "Limite superior do domínio",        apply_domain_max},
-    {"fitness",    FIELD_FN,     "sphere",   "Função de aptidão",                 apply_fitness   },
+    {"algorithm",  FIELD_ENUM,   NULL,       "Algorithm to run: pso",             apply_algorithm },
+    {"seed",       FIELD_UINT,   NULL,       "RNG seed (omitted = generated)",    apply_seed      },
+    {"direction",  FIELD_ENUM,   "minimize", "Direction: minimize | maximize",    apply_direction },
+    {"n_dims",     FIELD_INT,    "2",        "Number of dimensions",              apply_n_dims    },
+    {"domain_min", FIELD_DOUBLE, "-5.0",     "Lower bound of the domain",         apply_domain_min},
+    {"domain_max", FIELD_DOUBLE, "5.0",      "Upper bound of the domain",         apply_domain_max},
+    {"fitness",    FIELD_FN,     "sphere",   "Fitness function",                  apply_fitness   },
     {NULL,         0,            NULL,       NULL,                                NULL            },
 };
 
@@ -116,14 +116,14 @@ static const char* field_type_name(FieldType t) {
 
 static const char* default_display_for(const FieldSpec* f) {
   if (f->default_display) return f->default_display;
-  if (strcmp(f->name, "algorithm") == 0) return "(obrigatório)";
-  if (strcmp(f->name, "seed") == 0) return "(gerada)";
+  if (strcmp(f->name, "algorithm") == 0) return "(required)";
+  if (strcmp(f->name, "seed") == 0) return "(generated)";
   return "-";
 }
 
 void print_help_from_table(const FieldSpec* table) {
   for (int i = 0; table[i].name; i++) {
-    printf("  %-16s  %-7s  (padrão: %-14s)  %s\n", table[i].name, field_type_name(table[i].type),
+    printf("  %-16s  %-7s  (default: %-14s)  %s\n", table[i].name, field_type_name(table[i].type),
            default_display_for(&table[i]), table[i].description ? table[i].description : "");
   }
 }
@@ -138,7 +138,7 @@ void apply_field(const char* source, const char* key, const char* val) {
     }
   }
 
-  if (!algorithm_seen) die_at(source, key, "'algorithm' deve ser a primeira chave do arquivo");
+  if (!algorithm_seen) die_at(source, key, "'algorithm' must be the first key in the file");
 
   const FieldSpec* tbl = g_cfg.algorithm->fields;
   for (int i = 0; tbl[i].name; i++) {
@@ -148,7 +148,7 @@ void apply_field(const char* source, const char* key, const char* val) {
     }
   }
 
-  die_at(source, key, "chave desconhecida para o algoritmo selecionado");
+  die_at(source, key, "unknown key for the selected algorithm");
 }
 
 // --- Validation ---
@@ -163,24 +163,24 @@ static const FitnessEntry* fitness_entry_for(double (*fn)(const double*)) {
 
 void validate(void) {
   if (g_cfg.domain_min >= g_cfg.domain_max)
-    die("domain_min deve ser estritamente menor que domain_max");
+    die("domain_min must be strictly less than domain_max");
 
   const FitnessEntry* fe = fitness_entry_for(g_cfg.fitness_fn);
-  if (!fe) die("função de aptidão não encontrada no catálogo");
+  if (!fe) die("fitness function not found in catalog");
   char msg[256];
 
   if (fe->n_dims_min && g_cfg.n_dims < fe->n_dims_min) {
-    snprintf(msg, sizeof(msg), "para %s, n_dims deve ser pelo menos %d (atual: %d)", fe->name,
+    snprintf(msg, sizeof(msg), "for %s, n_dims must be at least %d (current: %d)", fe->name,
              fe->n_dims_min, g_cfg.n_dims);
     die(msg);
   }
   if (fe->n_dims_max && g_cfg.n_dims > fe->n_dims_max) {
-    snprintf(msg, sizeof(msg), "para %s, n_dims deve ser no máximo %d (atual: %d)", fe->name,
+    snprintf(msg, sizeof(msg), "for %s, n_dims must be at most %d (current: %d)", fe->name,
              fe->n_dims_max, g_cfg.n_dims);
     die(msg);
   }
   if (g_cfg.domain_min < fe->domain_lo || g_cfg.domain_max > fe->domain_hi) {
-    snprintf(msg, sizeof(msg), "para %s, o domínio deve estar contido em [%g, %g]", fe->name,
+    snprintf(msg, sizeof(msg), "for %s, the domain must be contained in [%g, %g]", fe->name,
              fe->domain_lo, fe->domain_hi);
     die(msg);
   }
