@@ -50,3 +50,9 @@ extern const FieldSpec ga_fields[];
 void ga_run(void);
 void ga_dump(void);
 void ga_validate(void);
+
+// SMA
+extern const FieldSpec sma_fields[];
+
+void sma_run(void);
+void sma_dump(void);

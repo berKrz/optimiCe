@@ -13,7 +13,8 @@ SRC    = $(SRCDIR)/main.c \
          $(SRCDIR)/ini.c \
          $(SRCDIR)/args.c \
          $(SRCDIR)/algorithms/pso.c \
-         $(SRCDIR)/algorithms/ga.c
+         $(SRCDIR)/algorithms/ga.c \
+         $(SRCDIR)/algorithms/sma.c
 OBJ    = $(SRC:.c=.o)
 
 all: $(TARGET)
