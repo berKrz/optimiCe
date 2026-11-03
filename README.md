@@ -22,6 +22,14 @@ optimiCe runs an optimization algorithm against a user-defined fitness function 
 - Configurable inertia (`w`), cognitive coefficient (`c1`), and social coefficient (`c2`)
 - `pbest` initialization by particle position, or by independent random draw
 
+## GA
+
+- Binary genetic algorithm over an N-dimensional continuous search space: each individual carries `n_dims × ind_size` bits, with each dimension's `ind_size`-bit slice linearly decoded onto `[domain_min, domain_max]`
+- Fitness-proportional (roulette) or tournament selection; roulette shifts weights by `max − f + 1` under minimization so the direction-agnostic draw stays meaningful
+- Dimension-aware single-point crossover: the cut ratio applies independently within each dimension's slice, so no dimension is wholly swapped at once
+- Per-bit mutation at a configurable rate
+- `ind_size` capped at 63 so the per-dimension decode fits in a single `uint64_t`
+
 ## Build
 
 ```bash
@@ -80,7 +88,7 @@ pbest_init = position
 
 | Key          | Type   | Default    | Description                                                                                     |
 |--------------|--------|------------|-------------------------------------------------------------------------------------------------|
-| `algorithm`  | enum   | required   | `pso`                                                                                           |
+| `algorithm`  | enum   | required   | `pso` or `ga`                                                                                   |
 | `seed`       | uint   | auto       | RNG seed (32-bit). When omitted, one is generated and reported in the final result               |
 | `direction`  | enum   | `minimize` | `minimize` or `maximize`                                                                        |
 | `n_dims`     | int    | `2`        | Number of dimensions                                                                            |
@@ -98,6 +106,19 @@ pbest_init = position
 | `c1`         | float | `2.0`      | Cognitive coefficient                                                                 |
 | `c2`         | float | `2.0`      | Social coefficient                                                                    |
 | `pbest_init` | enum  | `position` | `position` (pbest starts at the initial position) or `random` (independent random point) |
+
+### GA fields
+
+| Key               | Type  | Default        | Description                                                                                 |
+|-------------------|-------|----------------|---------------------------------------------------------------------------------------------|
+| `pop_size`        | int   | `15`           | Population size (minimum 2)                                                                 |
+| `ind_size`        | int   | `22`           | Bits per dimension, in `[2, 63]`. Total bits per individual is `n_dims × ind_size`          |
+| `generations`     | int   | `30`           | Number of generations                                                                       |
+| `tournament_size` | int   | `2`            | Individuals per tournament; must be at most `pop_size`. Only used when `selection=tournament` |
+| `cut_point`       | float | `0.6`          | Cut point ratio in `(0.0, 1.0)`; the cut index is `floor(ind_size × cut_point)` per dimension |
+| `mutation_rate`   | float | `0.01`         | Per-bit flip probability in `[0.0, 1.0)`                                                    |
+| `selection`       | name  | `roulette`     | `roulette` or `tournament`                                                                  |
+| `crossover`       | name  | `single_point` | `single_point` (only option so far)                                                         |
 
 ## Dev environment
 
