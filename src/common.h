@@ -6,30 +6,10 @@ typedef struct Algorithm Algorithm;  // defined in algorithms.h
 typedef struct FieldSpec FieldSpec;  // defined in algorithms.h
 
 typedef enum { MINIMIZE, MAXIMIZE } OptDirection;
-typedef enum { PBEST_POSITION, PBEST_RANDOM } PbestInit;
 
-typedef struct {
-  int    pop_size;
-  int    ind_size;  // bits per dimension (capped at 63 so 1ULL << ind_size is defined)
-  int    generations;
-  int    tournament_size;
-  double cut_point;      // cut point ratio in (0.0, 1.0), applied per-dimension
-  double mutation_rate;  // per-bit flip probability in [0.0, 1.0)
-
-  // Resolved by the "selection" / "crossover" handlers in ga.c
-  void (*selection_fn)(uint64_t* pop);
-  void (*crossover_fn)(uint64_t* a, uint64_t* b);
-} GaConfig;
-
-typedef struct {
-  int       swarm_size;
-  int       iterations;
-  double    w;
-  double    c1;
-  double    c2;
-  PbestInit pbest_init;
-} PsoConfig;
-
+// Common config shared across all algorithms. Each algorithm's own parameters
+// live in a file-scope `_Thread_local cfg` inside its own translation unit --
+// private, out of the shared header and per-thread
 typedef struct {
   uint32_t     seed;
   OptDirection direction;
@@ -41,11 +21,6 @@ typedef struct {
   double (*fitness_fn)(const double* pos);
 
   const Algorithm* algorithm;
-
-  union {
-    GaConfig  ga;
-    PsoConfig pso;
-  };
 } Config;
 
 extern _Thread_local Config g_cfg;

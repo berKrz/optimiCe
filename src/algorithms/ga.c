@@ -8,10 +8,32 @@
 #include "algorithms.h"
 #include "common.h"
 
+// --- GA-private config state ---
+
+typedef struct {
+  int    pop_size;
+  int    ind_size;  // bits per dimension (capped at 63 so 1ULL << ind_size is defined)
+  int    generations;
+  int    tournament_size;
+  double cut_point;      // cut point ratio in (0.0, 1.0), applied per-dimension
+  double mutation_rate;  // per-bit flip probability in [0.0, 1.0)
+
+  void (*selection_fn)(uint64_t* pop);
+  void (*crossover_fn)(uint64_t* a, uint64_t* b);
+} GaConfig;
+
+static _Thread_local GaConfig cfg;
+
 // --- Bit-packed individual layout ---
+//
+// The population is one flat uint64_t[pop_size * words_per_ind]. Each
+// individual gets n_dims * ind_size contiguous bits (little-endian within
+// its own slice: bit b of dimension d lives at global index d * ind_size + b).
+// Decoded dimensions come out as unsigned integers in [0, 2^ind_size - 1],
+// then linearly mapped onto [domain_min, domain_max]
 
 static int words_per_ind(void) {
-  int total_bits = g_cfg.n_dims * g_cfg.ga.ind_size;
+  int total_bits = g_cfg.n_dims * cfg.ind_size;
   return (total_bits + 63) / 64;
 }
 
@@ -74,7 +96,7 @@ static void apply_pop_size(const char* source, const char* key, const char* val)
   long v = strtol(val, &end, 10);
   if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 2 || v > INT_MAX)
     die_at(source, key, "must be an integer >= 2");
-  g_cfg.ga.pop_size = (int) v;
+  cfg.pop_size = (int) v;
 }
 
 static void apply_ind_size(const char* source, const char* key, const char* val) {
@@ -84,7 +106,7 @@ static void apply_ind_size(const char* source, const char* key, const char* val)
   // Cap at 63 so (1ULL << ind_size) is well-defined. 2 is the minimum useful value.
   if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 2 || v > 63)
     die_at(source, key, "must be an integer in [2, 63]");
-  g_cfg.ga.ind_size = (int) v;
+  cfg.ind_size = (int) v;
 }
 
 static void apply_generations(const char* source, const char* key, const char* val) {
@@ -93,7 +115,7 @@ static void apply_generations(const char* source, const char* key, const char* v
   long v = strtol(val, &end, 10);
   if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 1 || v > INT_MAX)
     die_at(source, key, "must be a positive integer");
-  g_cfg.ga.generations = (int) v;
+  cfg.generations = (int) v;
 }
 
 static void apply_tournament_size(const char* source, const char* key, const char* val) {
@@ -103,7 +125,7 @@ static void apply_tournament_size(const char* source, const char* key, const cha
   // Cross-field check (<= pop_size) runs in ga_validate; here we only enforce >= 2.
   if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 2 || v > INT_MAX)
     die_at(source, key, "must be an integer >= 2");
-  g_cfg.ga.tournament_size = (int) v;
+  cfg.tournament_size = (int) v;
 }
 
 static void apply_cut_point(const char* source, const char* key, const char* val) {
@@ -112,7 +134,7 @@ static void apply_cut_point(const char* source, const char* key, const char* val
   double v = strtod(val, &end);
   if (*val == '\0' || *end != '\0' || errno == ERANGE || !(v > 0.0 && v < 1.0))
     die_at(source, key, "must be a number in (0.0, 1.0)");
-  g_cfg.ga.cut_point = v;
+  cfg.cut_point = v;
 }
 
 static void apply_mutation_rate(const char* source, const char* key, const char* val) {
@@ -121,13 +143,13 @@ static void apply_mutation_rate(const char* source, const char* key, const char*
   double v = strtod(val, &end);
   if (*val == '\0' || *end != '\0' || errno == ERANGE || !(v >= 0.0 && v < 1.0))
     die_at(source, key, "must be a number in [0.0, 1.0)");
-  g_cfg.ga.mutation_rate = v;
+  cfg.mutation_rate = v;
 }
 
 static void apply_selection(const char* source, const char* key, const char* val) {
   for (int i = 0; selection_table[i].name; i++) {
     if (strcmp(val, selection_table[i].name) == 0) {
-      g_cfg.ga.selection_fn = selection_table[i].fn;
+      cfg.selection_fn = selection_table[i].fn;
       return;
     }
   }
@@ -137,7 +159,7 @@ static void apply_selection(const char* source, const char* key, const char* val
 static void apply_crossover(const char* source, const char* key, const char* val) {
   for (int i = 0; crossover_table[i].name; i++) {
     if (strcmp(val, crossover_table[i].name) == 0) {
-      g_cfg.ga.crossover_fn = crossover_table[i].fn;
+      cfg.crossover_fn = crossover_table[i].fn;
       return;
     }
   }
@@ -161,11 +183,11 @@ const FieldSpec ga_fields[] = {
 // --- Validate ---
 
 void ga_validate(void) {
-  if (g_cfg.ga.tournament_size > g_cfg.ga.pop_size) {
+  if (cfg.tournament_size > cfg.pop_size) {
     char msg[160];
     snprintf(msg, sizeof(msg),
              "tournament_size must be at most pop_size (pop_size=%d, tournament_size=%d)",
-             g_cfg.ga.pop_size, g_cfg.ga.tournament_size);
+             cfg.pop_size, cfg.tournament_size);
     die(msg);
   }
 }
@@ -173,14 +195,14 @@ void ga_validate(void) {
 // --- Dump ---
 
 void ga_dump(void) {
-  printf("pop_size        = %d\n", g_cfg.ga.pop_size);
-  printf("ind_size        = %d\n", g_cfg.ga.ind_size);
-  printf("generations     = %d\n", g_cfg.ga.generations);
-  printf("tournament_size = %d\n", g_cfg.ga.tournament_size);
-  printf("cut_point       = %g\n", g_cfg.ga.cut_point);
-  printf("mutation_rate   = %g\n", g_cfg.ga.mutation_rate);
-  printf("selection       = %s\n", selection_name_for(g_cfg.ga.selection_fn));
-  printf("crossover       = %s\n", crossover_name_for(g_cfg.ga.crossover_fn));
+  printf("pop_size        = %d\n", cfg.pop_size);
+  printf("ind_size        = %d\n", cfg.ind_size);
+  printf("generations     = %d\n", cfg.generations);
+  printf("tournament_size = %d\n", cfg.tournament_size);
+  printf("cut_point       = %g\n", cfg.cut_point);
+  printf("mutation_rate   = %g\n", cfg.mutation_rate);
+  printf("selection       = %s\n", selection_name_for(cfg.selection_fn));
+  printf("crossover       = %s\n", crossover_name_for(cfg.crossover_fn));
 }
 
 // --- Decode / eval ---
@@ -188,11 +210,11 @@ void ga_dump(void) {
 // Reads ind_size bits of dimension d as an unsigned int and linearly maps it onto [domain_min,
 // domain_max]. ind_size <= 63 guarantees 1ULL << ind_size stays well-defined
 static double decode_dim(const uint64_t* ind, int d) {
-  int      base = d * g_cfg.ga.ind_size;
+  int      base = d * cfg.ind_size;
   uint64_t n    = 0;
-  for (int b = 0; b < g_cfg.ga.ind_size; b++)
+  for (int b = 0; b < cfg.ind_size; b++)
     if (bit_get(ind, base + b)) n |= (1ULL << b);
-  double max_n = (double) ((1ULL << g_cfg.ga.ind_size) - 1ULL);
+  double max_n = (double) ((1ULL << cfg.ind_size) - 1ULL);
   return g_cfg.domain_min + (double) n * (g_cfg.domain_max - g_cfg.domain_min) / max_n;
 }
 
@@ -215,7 +237,7 @@ static int find_best(const uint64_t* pop, double* tmp) {
   int    words    = words_per_ind();
   int    best_idx = 0;
   double best_fit = eval(pop, tmp);
-  for (int i = 1; i < g_cfg.ga.pop_size; i++) {
+  for (int i = 1; i < cfg.pop_size; i++) {
     double f = eval(pop + i * words, tmp);
     if (is_better(f, best_fit)) {
       best_fit = f;
@@ -230,10 +252,10 @@ static int find_best(const uint64_t* pop, double* tmp) {
 // Dimension-aware single-point crossover: within each dimension's slice, bits
 // [cut, ind_size) are swapped. The cut is the same ratio in every dimension
 static void crossover_single_point(uint64_t* a, uint64_t* b) {
-  int cut = (int) (g_cfg.ga.ind_size * g_cfg.ga.cut_point);
+  int cut = (int) (cfg.ind_size * cfg.cut_point);
   for (int d = 0; d < g_cfg.n_dims; d++) {
-    int base = d * g_cfg.ga.ind_size;
-    for (int i = cut; i < g_cfg.ga.ind_size; i++) {
+    int base = d * cfg.ind_size;
+    for (int i = cut; i < cfg.ind_size; i++) {
       int gi    = base + i;
       int bit_a = bit_get(a, gi);
       int bit_b = bit_get(b, gi);
@@ -248,10 +270,10 @@ static void crossover_single_point(uint64_t* a, uint64_t* b) {
 // Per-bit flip at `mutation_rate`. In interactive mode, prints a per-individual
 // header on the first flip and each flipped bit index underneath
 static void mutation(uint64_t* ind, int index) {
-  int total_bits = g_cfg.n_dims * g_cfg.ga.ind_size;
+  int total_bits = g_cfg.n_dims * cfg.ind_size;
   int header     = 0;
   for (int i = 0; i < total_bits; i++) {
-    if (rng_next_double() < g_cfg.ga.mutation_rate) {
+    if (rng_next_double() < cfg.mutation_rate) {
       if (g_cfg.interactive) {
         if (!header) {
           header = 1;
@@ -267,7 +289,7 @@ static void mutation(uint64_t* ind, int index) {
 // --- Selection ---
 
 static void selection_roulette(uint64_t* pop) {
-  int pop_size = g_cfg.ga.pop_size;
+  int pop_size = cfg.pop_size;
   int words    = words_per_ind();
 
   double*   fits = malloc(pop_size * sizeof(double));
@@ -316,9 +338,9 @@ static void selection_roulette(uint64_t* pop) {
 }
 
 static void selection_tournament(uint64_t* pop) {
-  int pop_size = g_cfg.ga.pop_size;
+  int pop_size = cfg.pop_size;
   int words    = words_per_ind();
-  int k        = g_cfg.ga.tournament_size;
+  int k        = cfg.tournament_size;
 
   double*   fits = malloc(pop_size * sizeof(double));
   uint64_t* aux  = malloc(pop_size * words * sizeof(uint64_t));
@@ -352,9 +374,9 @@ static void selection_tournament(uint64_t* pop) {
 // mutation. If pop_size is odd, the last individual is mutated but not crossed
 static void iter_pop(uint64_t* pop) {
   int words = words_per_ind();
-  for (int i = 0; i < g_cfg.ga.pop_size; i++) {
-    if (i != g_cfg.ga.pop_size - 1 && i % 2 == 0)
-      g_cfg.ga.crossover_fn(pop + i * words, pop + (i + 1) * words);
+  for (int i = 0; i < cfg.pop_size; i++) {
+    if (i != cfg.pop_size - 1 && i % 2 == 0)
+      cfg.crossover_fn(pop + i * words, pop + (i + 1) * words);
     mutation(pop + i * words, i);
   }
 }
@@ -365,8 +387,7 @@ static void print_ind_bits(const uint64_t* ind) {
   for (int d = 0; d < g_cfg.n_dims; d++) {
     if (d > 0) printf(" ");
     printf("[");
-    for (int b = g_cfg.ga.ind_size - 1; b >= 0; b--)
-      printf("%d", bit_get(ind, d * g_cfg.ga.ind_size + b));
+    for (int b = cfg.ind_size - 1; b >= 0; b--) printf("%d", bit_get(ind, d * cfg.ind_size + b));
     printf("]");
   }
 }
@@ -383,7 +404,7 @@ static void print_pop(const uint64_t* pop) {
   if (!tmp) die("memory allocation failed");
   int best_idx = find_best(pop, tmp);
 
-  for (int i = 0; i < g_cfg.ga.pop_size; i++) {
+  for (int i = 0; i < cfg.pop_size; i++) {
     double fit = eval(pop + i * words, tmp);
 
     if (i == best_idx) printf(">> Individual %2d\n", i);
@@ -408,8 +429,8 @@ static void print_pares(const uint64_t* pop) {
   double* tmp   = malloc(g_cfg.n_dims * sizeof(double));
   if (!tmp) die("memory allocation failed");
 
-  for (int i = 0; i < g_cfg.ga.pop_size; i++) {
-    int is_odd_last = (i == g_cfg.ga.pop_size - 1) && (g_cfg.ga.pop_size % 2 != 0);
+  for (int i = 0; i < cfg.pop_size; i++) {
+    int is_odd_last = (i == cfg.pop_size - 1) && (cfg.pop_size % 2 != 0);
 
     if (is_odd_last) printf("  Pair %d  (no partner)\n", i / 2);
     else printf("  Pair %d\n", i / 2);
@@ -447,9 +468,9 @@ static void print_pares(const uint64_t* pop) {
 // --- Init ---
 
 static void init_pop(uint64_t* pop) {
-  int pop_size   = g_cfg.ga.pop_size;
+  int pop_size   = cfg.pop_size;
   int words      = words_per_ind();
-  int total_bits = g_cfg.n_dims * g_cfg.ga.ind_size;
+  int total_bits = g_cfg.n_dims * cfg.ind_size;
 
   // calloc in ga_run already zeroed the buffer; just set the 1 bits
   for (int i = 0; i < pop_size; i++)
@@ -460,7 +481,7 @@ static void init_pop(uint64_t* pop) {
 // --- Entry point ---
 
 void ga_run(void) {
-  int pop_size = g_cfg.ga.pop_size;
+  int pop_size = cfg.pop_size;
   int words    = words_per_ind();
 
   uint64_t* pop = calloc((size_t) pop_size * (size_t) words, sizeof(uint64_t));
@@ -476,10 +497,10 @@ void ga_run(void) {
     print_separator();
   }
 
-  for (int gen = 0; gen < g_cfg.ga.generations; gen++) {
+  for (int gen = 0; gen < cfg.generations; gen++) {
     if (g_cfg.interactive) {
       print_iteration_header(gen);
-      g_cfg.ga.selection_fn(pop);
+      cfg.selection_fn(pop);
       print_pares(pop);
       wait_for_enter();
       print_separator();
@@ -489,7 +510,7 @@ void ga_run(void) {
       wait_for_enter();
       print_separator();
     } else {
-      g_cfg.ga.selection_fn(pop);
+      cfg.selection_fn(pop);
       iter_pop(pop);
       double bf = eval(pop + find_best(pop, tmp) * words, tmp);
       print_iteration_line(gen, bf);

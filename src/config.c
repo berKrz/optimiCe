@@ -192,7 +192,7 @@ void validate(void) {
 void dump_config_fn(void) {
   const FitnessEntry* fe = fitness_entry_for(g_cfg.fitness_fn);
 
-  printf("# resolved g_cfg\n");
+  printf("# resolved config\n");
   printf("algorithm   = %s\n", g_cfg.algorithm ? g_cfg.algorithm->name : "(unset)");
   printf("seed        = 0x%08x\n", g_cfg.seed);
   printf("direction   = %s\n", g_cfg.direction == MINIMIZE ? "minimize" : "maximize");
