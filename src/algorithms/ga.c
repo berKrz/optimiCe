@@ -229,8 +229,6 @@ static double eval(const uint64_t* ind, double* tmp) {
   return g_cfg.fitness_fn(tmp);
 }
 
-static int is_better(double a, double b) { return g_cfg.direction == MINIMIZE ? a < b : a > b; }
-
 // Scans the population and returns the index of its current best individual
 // Caller provides `tmp` (n_dims doubles) as the decode scratch buffer
 static int find_best(const uint64_t* pop, double* tmp) {
@@ -392,12 +390,6 @@ static void print_ind_bits(const uint64_t* ind) {
   }
 }
 
-static void print_vec(const double* v) {
-  printf("[ ");
-  for (int d = 0; d < g_cfg.n_dims; d++) printf("%7.3f ", v[d]);
-  printf("]");
-}
-
 static void print_pop(const uint64_t* pop) {
   int     words = words_per_ind();
   double* tmp   = malloc(g_cfg.n_dims * sizeof(double));
@@ -424,7 +416,7 @@ static void print_pop(const uint64_t* pop) {
   free(tmp);
 }
 
-static void print_pares(const uint64_t* pop) {
+static void print_pairs(const uint64_t* pop) {
   int     words = words_per_ind();
   double* tmp   = malloc(g_cfg.n_dims * sizeof(double));
   if (!tmp) die("memory allocation failed");
@@ -501,7 +493,7 @@ void ga_run(void) {
     if (g_cfg.interactive) {
       print_iteration_header(gen);
       cfg.selection_fn(pop);
-      print_pares(pop);
+      print_pairs(pop);
       wait_for_enter();
       print_separator();
       iter_pop(pop);

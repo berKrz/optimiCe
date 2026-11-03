@@ -14,7 +14,6 @@ const Algorithm algorithms[] = {
 int main(int argc, char** argv) {
   set_defaults_from_table(common_fields);
   parse_args(argc, argv);
-  if (!g_cfg.algorithm) die("algorithm not set in config file");
   if (g_cfg.interactive) clear_screen();
   g_cfg.algorithm->run();
 

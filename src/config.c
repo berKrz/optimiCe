@@ -105,7 +105,7 @@ void set_defaults_from_table(const FieldSpec* table) {
 static const char* field_type_name(FieldType t) {
   switch (t) {
     case FIELD_INT:    return "int";
-    case FIELD_UINT:   return "uint64";
+    case FIELD_UINT:   return "uint32";
     case FIELD_DOUBLE: return "float";
     case FIELD_BOOL:   return "bool";
     case FIELD_ENUM:   return "enum";
@@ -131,14 +131,15 @@ void print_help_from_table(const FieldSpec* table) {
 // --- Dispatch ---
 
 void apply_field(const char* source, const char* key, const char* val) {
+  if (!algorithm_seen && strcmp(key, "algorithm") != 0)
+    die_at(source, key, "'algorithm' must be the first key in the file");
+
   for (int i = 0; common_fields[i].name; i++) {
     if (strcmp(key, common_fields[i].name) == 0) {
       common_fields[i].apply(source, key, val);
       return;
     }
   }
-
-  if (!algorithm_seen) die_at(source, key, "'algorithm' must be the first key in the file");
 
   const FieldSpec* tbl = g_cfg.algorithm->fields;
   for (int i = 0; tbl[i].name; i++) {
@@ -162,6 +163,7 @@ static const FitnessEntry* fitness_entry_for(double (*fn)(const double*)) {
 }
 
 void validate(void) {
+  if (!g_cfg.algorithm) die("algorithm not set in config file");
   if (g_cfg.domain_min >= g_cfg.domain_max) die("domain_min must be strictly less than domain_max");
 
   const FitnessEntry* fe = fitness_entry_for(g_cfg.fitness_fn);

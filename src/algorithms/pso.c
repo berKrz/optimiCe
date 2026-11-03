@@ -117,8 +117,6 @@ typedef struct {
 
 // --- Internals ---
 
-static int is_better(double a, double b) { return g_cfg.direction == MINIMIZE ? a < b : a > b; }
-
 static void copy_pos(double* dst, const double* src) {
   for (int d = 0; d < g_cfg.n_dims; d++) dst[d] = src[d];
 }
@@ -200,12 +198,6 @@ static void update_swarm(Particle* swarm, double* gbest_pos, double* gbest_fitne
 }
 
 // --- Presentation ---
-
-static void print_vec(const double* v) {
-  printf("[ ");
-  for (int d = 0; d < g_cfg.n_dims; d++) printf("%7.3f ", v[d]);
-  printf("]");
-}
 
 static void print_particle(const Particle* p, int index, double gbest_fitness) {
   int is_gbest_holder = (p->pbest_fitness == gbest_fitness);

@@ -36,6 +36,8 @@ void print_separator(void);
 void print_iteration_header(int iter);
 void print_iteration_line(int iter, double best_fitness);
 void print_result(const double* best_pos, double best_fitness);
+void print_vec(const double* v);
+int  is_better(double a, double b);
 
 // rng.c
 void   rng_init_with(uint32_t seed);

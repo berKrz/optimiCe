@@ -66,3 +66,11 @@ void print_result(const double* best_pos, double best_fitness) {
   for (int i = 0; i < LINE_WIDTH; i++) printf("=");
   printf("\n");
 }
+
+void print_vec(const double* v) {
+  printf("[ ");
+  for (int d = 0; d < g_cfg.n_dims; d++) printf("%7.3f ", v[d]);
+  printf("]");
+}
+
+int is_better(double a, double b) { return g_cfg.direction == MINIMIZE ? a < b : a > b; }
