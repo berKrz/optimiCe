@@ -9,7 +9,16 @@ typedef enum { MINIMIZE, MAXIMIZE } OptDirection;
 typedef enum { PBEST_POSITION, PBEST_RANDOM } PbestInit;
 
 typedef struct {
-  int _placeholder;  // replaced wholesale when GA is ported
+  int    pop_size;
+  int    ind_size;  // bits per dimension (capped at 63 so 1ULL << ind_size is defined)
+  int    generations;
+  int    tournament_size;
+  double cut_point;      // cut point ratio in (0.0, 1.0), applied per-dimension
+  double mutation_rate;  // per-bit flip probability in [0.0, 1.0)
+
+  // Resolved by the "selection" / "crossover" handlers in ga.c
+  void (*selection_fn)(uint64_t* pop);
+  void (*crossover_fn)(uint64_t* a, uint64_t* b);
 } GaConfig;
 
 typedef struct {

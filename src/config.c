@@ -84,14 +84,14 @@ static void apply_fitness(const char* source, const char* key, const char* val) 
 // --- Common field table ---
 
 const FieldSpec common_fields[] = {
-    {"algorithm",  FIELD_ENUM,   NULL,       "Algorithm to run: pso",             apply_algorithm },
-    {"seed",       FIELD_UINT,   NULL,       "RNG seed (omitted = generated)",    apply_seed      },
-    {"direction",  FIELD_ENUM,   "minimize", "Direction: minimize | maximize",    apply_direction },
-    {"n_dims",     FIELD_INT,    "2",        "Number of dimensions",              apply_n_dims    },
-    {"domain_min", FIELD_DOUBLE, "-5.0",     "Lower bound of the domain",         apply_domain_min},
-    {"domain_max", FIELD_DOUBLE, "5.0",      "Upper bound of the domain",         apply_domain_max},
-    {"fitness",    FIELD_FN,     "sphere",   "Fitness function",                  apply_fitness   },
-    {NULL,         0,            NULL,       NULL,                                NULL            },
+    {"algorithm",  FIELD_ENUM,   NULL,       "Algorithm to run: pso | ga",     apply_algorithm },
+    {"seed",       FIELD_UINT,   NULL,       "RNG seed (omitted = generated)", apply_seed      },
+    {"direction",  FIELD_ENUM,   "minimize", "Direction: minimize | maximize", apply_direction },
+    {"n_dims",     FIELD_INT,    "2",        "Number of dimensions",           apply_n_dims    },
+    {"domain_min", FIELD_DOUBLE, "-5.0",     "Lower bound of the domain",      apply_domain_min},
+    {"domain_max", FIELD_DOUBLE, "5.0",      "Upper bound of the domain",      apply_domain_max},
+    {"fitness",    FIELD_FN,     "sphere",   "Fitness function",               apply_fitness   },
+    {NULL,         0,            NULL,       NULL,                             NULL            },
 };
 
 // --- Walkers ---
@@ -162,8 +162,7 @@ static const FitnessEntry* fitness_entry_for(double (*fn)(const double*)) {
 }
 
 void validate(void) {
-  if (g_cfg.domain_min >= g_cfg.domain_max)
-    die("domain_min must be strictly less than domain_max");
+  if (g_cfg.domain_min >= g_cfg.domain_max) die("domain_min must be strictly less than domain_max");
 
   const FitnessEntry* fe = fitness_entry_for(g_cfg.fitness_fn);
   if (!fe) die("fitness function not found in catalog");

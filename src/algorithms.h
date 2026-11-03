@@ -43,3 +43,10 @@ extern const FieldSpec pso_fields[];
 
 void pso_run(void);
 void pso_dump(void);
+
+// GA
+extern const FieldSpec ga_fields[];
+
+void ga_run(void);
+void ga_dump(void);
+void ga_validate(void);
