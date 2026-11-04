@@ -30,6 +30,15 @@ optimiCe runs an optimization algorithm against a user-defined fitness function 
 - Per-bit mutation at a configurable rate
 - `ind_size` capped at 63 so the per-dimension decode fits in a single `uint64_t`
 
+## SMA
+
+- Rank-based weighting: at each iteration slimes are ranked by fitness; the better half gets weights `1 + r·log₁₀((bF − fᵢ)/S + 1)`, the worse half gets `1 − r·log₁₀(…)` — better rank attracts, worse rank repels
+- Three-branch position update per slime: with probability `z`, full uniform re-init; otherwise, per-dimension, probability `tanh|fᵢ − DF|` of exploiting around the best-ever using two random peers and amplitude `a = atanh(1 − t/T)`; else contract with amplitude `b = 1 − t/T`
+- Decay: both `a` and `b` shrink to zero as `t → T`, trading exploration for exploitation across the run
+- Opportunistic best-ever update within the iteration (mirrors PSO's async gbest — later slimes see the fresh best)
+- Boundary clamping: positions driven outside the domain are pinned to the bound
+
+
 ## Build
 
 ```bash
@@ -88,7 +97,7 @@ pbest_init = position
 
 | Key          | Type   | Default    | Description                                                                                     |
 |--------------|--------|------------|-------------------------------------------------------------------------------------------------|
-| `algorithm`  | enum   | required   | `pso` or `ga`                                                                                   |
+| `algorithm`  | enum   | required   | `pso`, `ga` or `sma`                                                                                   |
 | `seed`       | uint   | auto       | RNG seed (32-bit). When omitted, one is generated and reported in the final result               |
 | `direction`  | enum   | `minimize` | `minimize` or `maximize`                                                                        |
 | `n_dims`     | int    | `2`        | Number of dimensions                                                                            |
@@ -120,6 +129,15 @@ pbest_init = position
 | `selection`       | name  | `roulette`     | `roulette` or `tournament`                                                                  |
 | `crossover`       | name  | `single_point` | `single_point` (only option so far)                                                         |
 
+### SMA fields
+
+| Key          | Type  | Default | Description                                         |
+|--------------|-------|---------|-----------------------------------------------------|
+| `pop_size`   | int   | `30`    | Population size                                     |
+| `iterations` | int   | `100`   | Number of iterations                                |
+| `z`          | float | `0.03`  | Full re-init probability per slime, in `[0.0, 1.0]` |
+
+
 ## Dev environment
 
 The repo includes a Nix flake with the C toolchain and tools used during development:
@@ -128,6 +146,6 @@ The repo includes a Nix flake with the C toolchain and tools used during develop
 nix develop
 ```
 
-enters a shell with `gcc`, `clang-tools`, and `gdb`. With [direnv](https://direnv.net) installed, the shell activates automatically on `cd` into the directory - copy `.envrc.example` to `.envrc` and run `direnv allow`.
+enters a shell with `gcc`, `clang-tools`, `gdb` and `bear`. With [direnv](https://direnv.net) installed, the shell activates automatically on `cd` into the directory - copy `.envrc.example` to `.envrc` and run `direnv allow`.
 
 Nix is optional. `gcc` + `make` is enough to build and run the binary.
