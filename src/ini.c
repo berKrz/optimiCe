@@ -44,7 +44,7 @@ void parse_ini(const char* filename) {
     for (char* p = key; *p; p++)
       if (*p == '-') *p = '_';
 
-    apply_field(source, key, val);
+    // apply_field(source, key, val);
   }
 
   fclose(f);

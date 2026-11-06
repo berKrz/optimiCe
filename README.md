@@ -2,7 +2,7 @@
 
 A runner for metaheuristic optimization algorithms, written in C.
 
-optimiCe runs an optimization algorithm against a user-defined fitness function and reports the best solution it finds. The algorithm, fitness function, and all parameters are specified in an INI configuration file.
+optimiCe runs an optimization algorithm against a user-defined fitness function and reports the best solution it finds. The algorithm, fitness function, and all parameters are specified in a TOML configuration file.
 
 ## Common
 
@@ -10,7 +10,7 @@ optimiCe runs an optimization algorithm against a user-defined fitness function 
 - N-dimensional continuous search space
 - Minimization or maximization
 - Reproducible runs: `seed` can be set in the configuration; when omitted, one is generated and printed in the final result so any run can be rerun exactly
-- Configuration errors caught at startup, with messages pointing at the offending `file:line` and key
+- Configuration errors caught at startup, with messages pointing at the offending section and key
 - Interactive step-through mode (`-i`) for inspection
 - `--dump-config` prints the resolved configuration for debugging
 
@@ -45,17 +45,17 @@ optimiCe runs an optimization algorithm against a user-defined fitness function 
 make
 ```
 
-Requires `gcc` and `make`. Produces the `optimice` binary in the repo root.
+Produces the `optimice` binary in the repo root. The Nix shell provides `gcc`, `make`, `clang-tools` (clangd), `gdb`, `bear`, and the `tomlc17` dependency. With [direnv](https://direnv.net) installed, the shell activates automatically on `cd` into the directory — copy `.envrc.example` to `.envrc` and run `direnv allow`.
 
 ## Usage
 
 ```bash
-./optimice -f example.ini
+./optimice -f example.toml
 ```
 
 | Flag        | Long form           | Description                                              |
 |-------------|---------------------|----------------------------------------------------------|
-| `-f FILE`   | `--config FILE`     | Path to INI configuration file (required)                |
+| `-f FILE`   | `--config FILE`     | Path to TOML configuration file (required)                |
 | `-i`        | `--interactive`     | Pause after each iteration for inspection                |
 | `-l`        | `--list`            | List available algorithms                                |
 | `-d`        | `--dump-config`     | Print the resolved configuration and exit                |
@@ -63,26 +63,27 @@ Requires `gcc` and `make`. Produces the `optimice` binary in the repo root.
 
 ## Configuration
 
-All parameters are set in an INI file passed via `-f`.
+All parameters are set in a TOML file passed via `-f`, split into a `[common]` section for algorithm-agnostic fields and a `[[run]]` section carrying the algorithm selection and its algorithm-specific fields.
 
 ```ini
 # optimice example config - minimal PSO run
-algorithm = pso
-
-n_dims    = 2
-fitness   = sphere
-direction = minimize
+[common]
+n_dims     = 2
+fitness    = "sphere"
+direction  = "minimize"
 domain_min = -5.0
 domain_max =  5.0
 seed       = 42
 
 # PSO-specific
+[[run]]
+algorithm  = "pso"
 swarm_size = 30
 iterations = 100
 w          = 1.0
 c1         = 2.0
 c2         = 2.0
-pbest_init = position
+pbest_init = "position"
 ```
 
 ### Syntax

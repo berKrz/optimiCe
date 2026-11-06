@@ -1,7 +1,6 @@
-#include <errno.h>
 #include <float.h>
-#include <limits.h>
 #include <math.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,43 +18,25 @@ typedef struct {
 
 static _Thread_local SmaConfig cfg;
 
-// --- Field handlers ---
-
-static void apply_pop_size(const char* source, const char* key, const char* val) {
-  char* end;
-  errno  = 0;
-  long v = strtol(val, &end, 10);
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || v <= 0 || v > INT_MAX)
-    die_at(source, key, "must be a positive integer");
-  cfg.pop_size = (int) v;
-}
-
-static void apply_iterations(const char* source, const char* key, const char* val) {
-  char* end;
-  errno  = 0;
-  long v = strtol(val, &end, 10);
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || v <= 0 || v > INT_MAX)
-    die_at(source, key, "must be a positive integer");
-  cfg.iterations = (int) v;
-}
-
-static void apply_z(const char* source, const char* key, const char* val) {
-  char* end;
-  errno    = 0;
-  double v = strtod(val, &end);
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 0.0 || v > 1.0)
-    die_at(source, key, "must be a number in [0.0, 1.0]");
-  cfg.z = v;
-}
-
 // --- Field table ---
 
 const FieldSpec sma_fields[] = {
-    {"pop_size",   FIELD_INT,    "30",   "Population size",                      apply_pop_size  },
-    {"iterations", FIELD_INT,    "100",  "Number of iterations",                 apply_iterations},
-    {"z",          FIELD_DOUBLE, "0.03", "Full re-init probability (per slime)", apply_z         },
-    {NULL,         0,            NULL,   NULL,                                   NULL            },
+    {"pop_size", FIELD_INT, offsetof(SmaConfig, pop_size), NULL, "30", "Population size"},
+    {"iterations", FIELD_INT, offsetof(SmaConfig, iterations), NULL, "100", "Number of iterations"},
+    {"z", FIELD_DOUBLE, offsetof(SmaConfig, z), NULL, "0.03",
+     "Full re-init probability (per slime)"},
+    {NULL, 0, 0, NULL, NULL, NULL},
 };
+
+void* sma_cfg_base(void) { return &cfg; }
+
+// --- Validate ---
+
+void sma_validate(void) {
+  if (cfg.pop_size <= 0) die("sma: pop_size must be positive");
+  if (cfg.iterations <= 0) die("sma: iterations must be positive");
+  if (cfg.z < 0.0 || cfg.z > 1.0) die("sma: z must be in [0.0, 1.0]");
+}
 
 // --- Dump ---
 

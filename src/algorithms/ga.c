@@ -1,5 +1,4 @@
-#include <errno.h>
-#include <limits.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,16 +9,18 @@
 
 // --- GA-private config state ---
 
-typedef struct {
-  int    pop_size;
-  int    ind_size;  // bits per dimension (capped at 63 so 1ULL << ind_size is defined)
-  int    generations;
-  int    tournament_size;
-  double cut_point;      // cut point ratio in (0.0, 1.0), applied per-dimension
-  double mutation_rate;  // per-bit flip probability in [0.0, 1.0)
+typedef enum { ROULETTE, TOURNAMENT } SelectionKind;
+typedef enum { XOVER_SINGLE_POINT } CrossoverKind;
 
-  void (*selection_fn)(uint64_t* pop);
-  void (*crossover_fn)(uint64_t* a, uint64_t* b);
+typedef struct {
+  int           pop_size;
+  int           ind_size;  // bits per dimension (capped at 63 so 1ULL << ind_size is defined)
+  int           generations;
+  int           tournament_size;
+  double        cut_point;      // cut point ratio in (0.0, 1.0), applied per-dimension
+  double        mutation_rate;  // per-bit flip probability in [0.0, 1.0)
+  SelectionKind selection;
+  CrossoverKind crossover;
 } GaConfig;
 
 static _Thread_local GaConfig cfg;
@@ -49,150 +50,73 @@ static inline void bit_set(uint64_t* ind, int i, int v) {
 
 static inline void bit_flip(uint64_t* ind, int i) { ind[i / 64] ^= (1ULL << (i % 64)); }
 
-// --- Named tables for selection / crossover ---
+// --- Selection / crossover lookup tables ---
 
-static void selection_roulette(uint64_t* pop);
-static void selection_tournament(uint64_t* pop);
-static void crossover_single_point(uint64_t* a, uint64_t* b);
-
-typedef struct {
-  const char* name;
-  void (*fn)(uint64_t*);
-} SelectionEntry;
-
-typedef struct {
-  const char* name;
-  void (*fn)(uint64_t*, uint64_t*);
-} CrossoverEntry;
-
-static const SelectionEntry selection_table[] = {
-    {"roulette",   selection_roulette  },
-    {"tournament", selection_tournament},
-    {NULL,         NULL                },
+static const EnumEntry selection_table[] = {
+    {"roulette",   ROULETTE  },
+    {"tournament", TOURNAMENT},
+    {NULL,         0         },
 };
 
-static const CrossoverEntry crossover_table[] = {
-    {"single_point", crossover_single_point},
-    {NULL,           NULL                  },
+static const EnumEntry crossover_table[] = {
+    {"single_point", XOVER_SINGLE_POINT},
+    {NULL,           0                 },
 };
-
-static const char* selection_name_for(void (*fn)(uint64_t*)) {
-  for (int i = 0; selection_table[i].name; i++)
-    if (selection_table[i].fn == fn) return selection_table[i].name;
-  return "(unknown)";
-}
-
-static const char* crossover_name_for(void (*fn)(uint64_t*, uint64_t*)) {
-  for (int i = 0; crossover_table[i].name; i++)
-    if (crossover_table[i].fn == fn) return crossover_table[i].name;
-  return "(unknown)";
-}
-
-// --- Field handlers ---
-
-static void apply_pop_size(const char* source, const char* key, const char* val) {
-  char* end;
-  errno  = 0;
-  long v = strtol(val, &end, 10);
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 2 || v > INT_MAX)
-    die_at(source, key, "must be an integer >= 2");
-  cfg.pop_size = (int) v;
-}
-
-static void apply_ind_size(const char* source, const char* key, const char* val) {
-  char* end;
-  errno  = 0;
-  long v = strtol(val, &end, 10);
-  // Cap at 63 so (1ULL << ind_size) is well-defined. 2 is the minimum useful value.
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 2 || v > 63)
-    die_at(source, key, "must be an integer in [2, 63]");
-  cfg.ind_size = (int) v;
-}
-
-static void apply_generations(const char* source, const char* key, const char* val) {
-  char* end;
-  errno  = 0;
-  long v = strtol(val, &end, 10);
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 1 || v > INT_MAX)
-    die_at(source, key, "must be a positive integer");
-  cfg.generations = (int) v;
-}
-
-static void apply_tournament_size(const char* source, const char* key, const char* val) {
-  char* end;
-  errno  = 0;
-  long v = strtol(val, &end, 10);
-  // Cross-field check (<= pop_size) runs in ga_validate; here we only enforce >= 2.
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 2 || v > INT_MAX)
-    die_at(source, key, "must be an integer >= 2");
-  cfg.tournament_size = (int) v;
-}
-
-static void apply_cut_point(const char* source, const char* key, const char* val) {
-  char* end;
-  errno    = 0;
-  double v = strtod(val, &end);
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || !(v > 0.0 && v < 1.0))
-    die_at(source, key, "must be a number in (0.0, 1.0)");
-  cfg.cut_point = v;
-}
-
-static void apply_mutation_rate(const char* source, const char* key, const char* val) {
-  char* end;
-  errno    = 0;
-  double v = strtod(val, &end);
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || !(v >= 0.0 && v < 1.0))
-    die_at(source, key, "must be a number in [0.0, 1.0)");
-  cfg.mutation_rate = v;
-}
-
-static void apply_selection(const char* source, const char* key, const char* val) {
-  for (int i = 0; selection_table[i].name; i++) {
-    if (strcmp(val, selection_table[i].name) == 0) {
-      cfg.selection_fn = selection_table[i].fn;
-      return;
-    }
-  }
-  die_at(source, key, "unknown selection method");
-}
-
-static void apply_crossover(const char* source, const char* key, const char* val) {
-  for (int i = 0; crossover_table[i].name; i++) {
-    if (strcmp(val, crossover_table[i].name) == 0) {
-      cfg.crossover_fn = crossover_table[i].fn;
-      return;
-    }
-  }
-  die_at(source, key, "unknown crossover method");
-}
 
 // --- Field table ---
 
 const FieldSpec ga_fields[] = {
-    {"pop_size",        FIELD_INT,    "15",           "Population size (>= 2)",           apply_pop_size       },
-    {"ind_size",        FIELD_INT,    "22",           "Bits per dimension [2, 63]",       apply_ind_size       },
-    {"generations",     FIELD_INT,    "30",           "Number of generations",            apply_generations    },
-    {"tournament_size", FIELD_INT,    "2",            "Individuals per tournament",       apply_tournament_size},
-    {"cut_point",       FIELD_DOUBLE, "0.6",          "Cut point ratio in (0.0, 1.0)",    apply_cut_point      },
-    {"mutation_rate",   FIELD_DOUBLE, "0.01",         "Per-bit flip rate in [0.0, 1.0)",  apply_mutation_rate  },
-    {"selection",       FIELD_FN,     "roulette",     "Selection: roulette | tournament", apply_selection      },
-    {"crossover",       FIELD_FN,     "single_point", "Crossover: single_point",          apply_crossover      },
-    {NULL,              0,            NULL,           NULL,                               NULL                 },
+    {"pop_size", FIELD_INT, offsetof(GaConfig, pop_size), NULL, "15", "Population size (>= 2)"},
+    {"ind_size", FIELD_INT, offsetof(GaConfig, ind_size), NULL, "22", "Bits per dimension [2, 63]"},
+    {"generations", FIELD_INT, offsetof(GaConfig, generations), NULL, "30",
+     "Number of generations"},
+    {"tournament_size", FIELD_INT, offsetof(GaConfig, tournament_size), NULL, "2",
+     "Individuals per tournament"},
+    {"cut_point", FIELD_DOUBLE, offsetof(GaConfig, cut_point), NULL, "0.6",
+     "Cut point ratio in (0.0, 1.0)"},
+    {"mutation_rate", FIELD_DOUBLE, offsetof(GaConfig, mutation_rate), NULL, "0.01",
+     "Per-bit flip rate in [0.0, 1.0)"},
+    {"selection", FIELD_ENUM, offsetof(GaConfig, selection), selection_table, "roulette",
+     "Selection: roulette | tournament"},
+    {"crossover", FIELD_ENUM, offsetof(GaConfig, crossover), crossover_table, "single_point",
+     "Crossover: single_point"},
+    {NULL, 0, 0, NULL, NULL, NULL},
 };
+
+void* ga_cfg_base(void) { return &cfg; }
 
 // --- Validate ---
 
 void ga_validate(void) {
+  if (cfg.pop_size < 2) die("ga: pop_size must be >= 2");
+  if (cfg.ind_size < 2 || cfg.ind_size > 63) die("ga: ind_size must be in [2, 63]");
+  if (cfg.generations < 1) die("ga: generations must be positive");
+  if (cfg.tournament_size < 2) die("ga: tournament_size must be >= 2");
+  if (!(cfg.cut_point > 0.0 && cfg.cut_point < 1.0)) die("ga: cut_point must be in (0.0, 1.0)");
+  if (!(cfg.mutation_rate >= 0.0 && cfg.mutation_rate < 1.0))
+    die("ga: mutation_rate must be in [0.0, 1.0)");
   if (cfg.tournament_size > cfg.pop_size) {
     char msg[160];
     snprintf(msg, sizeof(msg),
-             "tournament_size must be at most pop_size (pop_size=%d, tournament_size=%d)",
+             "ga: tournament_size must be at most pop_size (pop_size=%d, tournament_size=%d)",
              cfg.pop_size, cfg.tournament_size);
     die(msg);
   }
 }
 
 // --- Dump ---
+
+static const char* selection_name(SelectionKind s) {
+  for (int i = 0; selection_table[i].name; i++)
+    if ((SelectionKind) selection_table[i].value == s) return selection_table[i].name;
+  return "(unknown)";
+}
+
+static const char* crossover_name(CrossoverKind c) {
+  for (int i = 0; crossover_table[i].name; i++)
+    if ((CrossoverKind) crossover_table[i].value == c) return crossover_table[i].name;
+  return "(unknown)";
+}
 
 void ga_dump(void) {
   printf("pop_size        = %d\n", cfg.pop_size);
@@ -201,8 +125,8 @@ void ga_dump(void) {
   printf("tournament_size = %d\n", cfg.tournament_size);
   printf("cut_point       = %g\n", cfg.cut_point);
   printf("mutation_rate   = %g\n", cfg.mutation_rate);
-  printf("selection       = %s\n", selection_name_for(cfg.selection_fn));
-  printf("crossover       = %s\n", crossover_name_for(cfg.crossover_fn));
+  printf("selection       = %s\n", selection_name(cfg.selection));
+  printf("crossover       = %s\n", crossover_name(cfg.crossover));
 }
 
 // --- Decode / eval ---
@@ -373,8 +297,13 @@ static void selection_tournament(uint64_t* pop) {
 static void iter_pop(uint64_t* pop) {
   int words = words_per_ind();
   for (int i = 0; i < cfg.pop_size; i++) {
-    if (i != cfg.pop_size - 1 && i % 2 == 0)
-      cfg.crossover_fn(pop + i * words, pop + (i + 1) * words);
+    if (i != cfg.pop_size - 1 && i % 2 == 0) {
+      switch (cfg.crossover) {
+        case XOVER_SINGLE_POINT:
+          crossover_single_point(pop + i * words, pop + (i + 1) * words);
+          break;
+      }
+    }
     mutation(pop + i * words, i);
   }
 }
@@ -472,6 +401,13 @@ static void init_pop(uint64_t* pop) {
 
 // --- Entry point ---
 
+static void run_selection(uint64_t* pop) {
+  switch (cfg.selection) {
+    case ROULETTE:   selection_roulette(pop); break;
+    case TOURNAMENT: selection_tournament(pop); break;
+  }
+}
+
 void ga_run(void) {
   int pop_size = cfg.pop_size;
   int words    = words_per_ind();
@@ -492,7 +428,7 @@ void ga_run(void) {
   for (int gen = 0; gen < cfg.generations; gen++) {
     if (g_cfg.interactive) {
       print_iteration_header(gen);
-      cfg.selection_fn(pop);
+      run_selection(pop);
       print_pairs(pop);
       wait_for_enter();
       print_separator();
@@ -502,7 +438,7 @@ void ga_run(void) {
       wait_for_enter();
       print_separator();
     } else {
-      cfg.selection_fn(pop);
+      run_selection(pop);
       iter_pop(pop);
       double bf = eval(pop + find_best(pop, tmp) * words, tmp);
       print_iteration_line(gen, bf);

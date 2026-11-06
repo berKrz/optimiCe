@@ -1,9 +1,7 @@
-#include <errno.h>
 #include <float.h>
-#include <limits.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "algorithms.h"
 #include "common.h"
@@ -23,70 +21,36 @@ typedef struct {
 
 static _Thread_local PsoConfig cfg;
 
-// --- Field handlers ---
-
-static void apply_swarm_size(const char* source, const char* key, const char* val) {
-  char* end;
-  errno  = 0;
-  long v = strtol(val, &end, 10);
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || v <= 0 || v > INT_MAX)
-    die_at(source, key, "must be a positive integer");
-  cfg.swarm_size = (int) v;
-}
-
-static void apply_iterations(const char* source, const char* key, const char* val) {
-  char* end;
-  errno  = 0;
-  long v = strtol(val, &end, 10);
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || v <= 0 || v > INT_MAX)
-    die_at(source, key, "must be a positive integer");
-  cfg.iterations = (int) v;
-}
-
-static void apply_w(const char* source, const char* key, const char* val) {
-  char* end;
-  errno    = 0;
-  double v = strtod(val, &end);
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 0.0)
-    die_at(source, key, "must be a non-negative number");
-  cfg.w = v;
-}
-
-static void apply_c1(const char* source, const char* key, const char* val) {
-  char* end;
-  errno    = 0;
-  double v = strtod(val, &end);
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 0.0)
-    die_at(source, key, "must be a non-negative number");
-  cfg.c1 = v;
-}
-
-static void apply_c2(const char* source, const char* key, const char* val) {
-  char* end;
-  errno    = 0;
-  double v = strtod(val, &end);
-  if (*val == '\0' || *end != '\0' || errno == ERANGE || v < 0.0)
-    die_at(source, key, "must be a non-negative number");
-  cfg.c2 = v;
-}
-
-static void apply_pbest_init(const char* source, const char* key, const char* val) {
-  if (strcmp(val, "position") == 0) cfg.pbest_init = PBEST_POSITION;
-  else if (strcmp(val, "random") == 0) cfg.pbest_init = PBEST_RANDOM;
-  else die_at(source, key, "must be 'position' or 'random'");
-}
-
 // --- Field table ---
 
-const FieldSpec pso_fields[] = {
-    {"swarm_size", FIELD_INT,    "30",       "Swarm size",                    apply_swarm_size},
-    {"iterations", FIELD_INT,    "100",      "Number of iterations",          apply_iterations},
-    {"w",          FIELD_DOUBLE, "1.0",      "Inertia weight",                apply_w         },
-    {"c1",         FIELD_DOUBLE, "2.0",      "Cognitive coefficient",         apply_c1        },
-    {"c2",         FIELD_DOUBLE, "2.0",      "Social coefficient",            apply_c2        },
-    {"pbest_init", FIELD_ENUM,   "position", "pbest init: position | random", apply_pbest_init},
-    {NULL,         0,            NULL,       NULL,                            NULL            },
+static const EnumEntry pbest_init_table[] = {
+    {"position", PBEST_POSITION},
+    {"random",   PBEST_RANDOM  },
+    {NULL,       0             },
 };
+
+const FieldSpec pso_fields[] = {
+    {"swarm_size", FIELD_INT, offsetof(PsoConfig, swarm_size), NULL, "30", "Swarm size"},
+    {"iterations", FIELD_INT, offsetof(PsoConfig, iterations), NULL, "100", "Number of iterations"},
+    {"w", FIELD_DOUBLE, offsetof(PsoConfig, w), NULL, "1.0", "Inertia weight"},
+    {"c1", FIELD_DOUBLE, offsetof(PsoConfig, c1), NULL, "2.0", "Cognitive coefficient"},
+    {"c2", FIELD_DOUBLE, offsetof(PsoConfig, c2), NULL, "2.0", "Social coefficient"},
+    {"pbest_init", FIELD_ENUM, offsetof(PsoConfig, pbest_init), pbest_init_table, "position",
+     "pbest init: position | random"},
+    {NULL, 0, 0, NULL, NULL, NULL},
+};
+
+void* pso_cfg_base(void) { return &cfg; }
+
+// --- Validation ---
+
+void pso_validate(void) {
+  if (cfg.swarm_size <= 0) die("pso: swarm_size must be positive");
+  if (cfg.iterations <= 0) die("pso: iterations must be positive");
+  if (cfg.w < 0.0) die("pso: w must be non-negative");
+  if (cfg.c1 < 0.0) die("pso: c1 must be non-negative");
+  if (cfg.c2 < 0.0) die("pso: c2 must be non-negative");
+}
 
 // --- Dump ---
 

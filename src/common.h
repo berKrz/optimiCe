@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdnoreturn.h>
 
 typedef struct Algorithm Algorithm;  // defined in algorithms.h
 typedef struct FieldSpec FieldSpec;  // defined in algorithms.h
@@ -28,8 +29,9 @@ extern _Thread_local Config g_cfg;
 #define LINE_WIDTH 50
 
 // utils.c
-void die(const char* msg);
-void die_at(const char* source, const char* key, const char* msg);
+noreturn void die(const char* msg);
+noreturn void die_at(const char* source, const char* key, const char* msg);
+
 void clear_screen(void);
 void wait_for_enter(void);
 void print_separator(void);
@@ -50,10 +52,10 @@ int    rng_next_bit(void);
 // config.c
 void apply_field(const char* source, const char* key, const char* val);
 void validate(void);
-void dump_config_fn(void);
+void dump_config(void);
 
-// ini.c
-void parse_ini(const char* filename);
+// toml.c
+void parse_toml(const char* filename);
 
 // args.c
 void parse_args(int argc, char** argv);

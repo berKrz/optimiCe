@@ -15,6 +15,7 @@
           clang-tools
           gdb
           bear
+          tomlc17
         ];
       };
 

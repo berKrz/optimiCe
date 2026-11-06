@@ -8,10 +8,10 @@
 
 static void print_help_overview(void) {
   printf(
-      "Usage: optimice -f <file.ini> [options]\n"
+      "Usage: optimice -f <file.toml> [options]\n"
       "\n"
       "Options:\n"
-      "  -f, --config <file>     INI configuration file (required)\n"
+      "  -f, --config <file>     TOML configuration file (required)\n"
       "  -i, --interactive       Pause after each iteration\n"
       "  -l, --list              List available algorithms\n"
       "  -d, --dump-config       Serialize g_cfg after parsing and exit\n"
@@ -27,7 +27,7 @@ static void print_help_overview(void) {
 static void print_help_algorithm(const char* name) {
   for (int i = 0; algorithms[i].name; i++) {
     if (strcmp(name, algorithms[i].name) == 0) {
-      printf("Fields for algorithm '%s' (configure via INI):\n", name);
+      printf("Fields for algorithm '%s' (configure via TOML):\n", name);
       print_help_from_table(algorithms[i].fields);
       return;
     }
@@ -53,7 +53,7 @@ void parse_args(int argc, char** argv) {
 
   const char* config_path = NULL;
   int         want_help   = 0;
-  int         dump_config = 0;
+  int         want_config = 0;
 
   opterr = 0;
   int c;
@@ -66,7 +66,7 @@ void parse_args(int argc, char** argv) {
       case 'l':
       case 'L': print_list(); exit(EXIT_SUCCESS);
       case 'd':
-      case 'D': dump_config = 1; break;
+      case 'D': want_config = 1; break;
       case 'h':
       case 'H': want_help = 1; break;
 
@@ -87,12 +87,10 @@ void parse_args(int argc, char** argv) {
   if (optind < argc) die("unexpected argument");
   if (!config_path) die("--config / -f is required");
 
-  parse_ini(config_path);
-  validate();
-  rng_init_auto();
+  parse_toml(config_path);
 
-  if (dump_config) {
-    dump_config_fn();
+  if (want_config) {
+    dump_config();
     exit(EXIT_SUCCESS);
   }
 }

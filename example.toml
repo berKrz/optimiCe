@@ -1,0 +1,15 @@
+# optimice example config - minimal SMA run
+
+[common]
+n_dims = 2
+fitness = "rosenbrock"
+direction = "minimize"
+domain_min = -5.0
+domain_max = 5.0
+# seed     = 42
+
+[[run]]
+algorithm = "sma"
+pop_size = 30
+iterations = 100
+z = 0.5
