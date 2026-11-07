@@ -41,11 +41,30 @@ optimiCe runs an optimization algorithm against a user-defined fitness function 
 
 ## Build
 
+optimiCe depends on [tomlc17](https://github.com/cktan/tomlc17) for TOML parsing. With it available:
+
 ```bash
 make
 ```
 
-Produces the `optimice` binary in the repo root. The Nix shell provides `gcc`, `make`, `clang-tools` (clangd), `gdb`, `bear`, and the `tomlc17` dependency. With [direnv](https://direnv.net) installed, the shell activates automatically on `cd` into the directory — copy `.envrc.example` to `.envrc` and run `direnv allow`.
+produces the `optimice` binary in the repo root. The Makefile locates tomlc17 through `pkg-config` (`libtomlc17.pc`), and falls back to a plain `-ltomlc17` if `pkg-config` can't find it.
+
+**With Nix**, the dev shell already provides tomlc17 (see [Dev environment](#dev-environment)). The flake also builds the binary directly:
+
+```bash
+nix build    # binary at ./result/bin/optimice
+```
+
+**Without Nix**, build and install tomlc17 from upstream first:
+
+```bash
+git clone https://github.com/cktan/tomlc17
+cd tomlc17
+make
+sudo make install    # installs to /usr/local by default
+```
+
+If you install it under a non-default prefix, point `pkg-config` at it when building optimiCe, e.g. `PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig make`.
 
 ## Usage
 
@@ -141,12 +160,10 @@ pbest_init = "position"
 
 ## Dev environment
 
-The repo includes a Nix flake with the C toolchain and tools used during development:
+The repo includes a Nix flake with the C toolchain, tomlc17, and the tools used during development:
 
 ```bash
 nix develop
 ```
 
-enters a shell with `gcc`, `clang-tools`, `gdb` and `bear`. With [direnv](https://direnv.net) installed, the shell activates automatically on `cd` into the directory - copy `.envrc.example` to `.envrc` and run `direnv allow`.
-
-Nix is optional. `gcc` + `make` is enough to build and run the binary.
+enters a shell with `gcc`, `pkg-config`, `tomlc17`, `clang-tools`, `gdb` and `bear`. With [direnv](https://direnv.net) installed, the shell activates automatically on `cd` into the directory: copy `.envrc.example` to `.envrc` and run `direnv allow`.
