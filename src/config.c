@@ -77,6 +77,8 @@ static void set_field(const char* source, const FieldSpec* row, void* base, toml
       return;
     }
     case FIELD_ENUM: {
+      // Enum-typed struct members are written as int - assumes enums are int-sized, which holds
+      // on GCC/Clang unless -fshort-enums is passed
       if (d.type != TOML_STRING) die_at(source, row->name, "expected string");
       const EnumEntry* t = row->lookup;
       for (int i = 0; t[i].name; i++) {

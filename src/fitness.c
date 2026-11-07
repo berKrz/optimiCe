@@ -61,7 +61,7 @@ double schaffer_f6(const double* pos) {
   return 0.5 + (sin(sqrt(r1)) * sin(sqrt(r1)) - 0.5) / (r2 * r2);
 }
 
-// Catalog of available fitness functions, by INI name. NULL-terminated.
+// Catalog of available fitness functions, by config name. NULL-terminated
 // Read by config.c's "fitness" handler to resolve a string to a function pointer,
 // and by validate() to enforce per-function preconditions on g_cfg.
 //

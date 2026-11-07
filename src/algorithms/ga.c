@@ -91,16 +91,19 @@ void ga_validate(void) {
   if (cfg.pop_size < 2) die("ga: pop_size must be >= 2");
   if (cfg.ind_size < 2 || cfg.ind_size > 63) die("ga: ind_size must be in [2, 63]");
   if (cfg.generations < 1) die("ga: generations must be positive");
-  if (cfg.tournament_size < 2) die("ga: tournament_size must be >= 2");
   if (!(cfg.cut_point > 0.0 && cfg.cut_point < 1.0)) die("ga: cut_point must be in (0.0, 1.0)");
   if (!(cfg.mutation_rate >= 0.0 && cfg.mutation_rate < 1.0))
     die("ga: mutation_rate must be in [0.0, 1.0)");
-  if (cfg.tournament_size > cfg.pop_size) {
-    char msg[160];
-    snprintf(msg, sizeof(msg),
-             "ga: tournament_size must be at most pop_size (pop_size=%d, tournament_size=%d)",
-             cfg.pop_size, cfg.tournament_size);
-    die(msg);
+  // tournament_size is ignored under other selections, so it's only checked when in use
+  if (cfg.selection == TOURNAMENT) {
+    if (cfg.tournament_size < 2) die("ga: tournament_size must be >= 2");
+    if (cfg.tournament_size > cfg.pop_size) {
+      char msg[160];
+      snprintf(msg, sizeof(msg),
+               "ga: tournament_size must be at most pop_size (pop_size=%d, tournament_size=%d)",
+               cfg.pop_size, cfg.tournament_size);
+      die(msg);
+    }
   }
 }
 
@@ -228,7 +231,7 @@ static void selection_roulette(uint64_t* pop) {
 
   // Roulette needs a positive weight per individual that grows with "goodness"
   // Maximization: use fitness directly. Minimization: shift by (max - f) + 1 so
-  // the worst individual gets weight 1 and better ones get higher weights.
+  // the worst individual gets weight 1 and better ones get higher weights
   double total = 0.0;
   if (g_cfg.direction == MAXIMIZE) {
     for (int i = 0; i < pop_size; i++) total += fits[i];

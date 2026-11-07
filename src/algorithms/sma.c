@@ -145,14 +145,11 @@ void sma_run(void) {
     // flipping the denominator's sign (negative for minimize, positive for maximize).
     double S = (bF - wF) + (g_cfg.direction == MINIMIZE ? -DBL_EPSILON : DBL_EPSILON);
 
-    if (is_better(bF, DF)) {
-      DF = bF;
-      memcpy(Xb, positions + order[0].idx * n, n * sizeof(double));
-    }
-
     // --- Weight update (per-slime per-dim
-    // Top half (ranks 0..pop_size/2 - 1) get 1 + r*log; bottom half gets 1 - r*log
-    int half = pop_size / 2;
+    // Top half (ranks 0..ceil(pop_size/2) - 1) get 1 + r*log; bottom half gets 1 - r*log.
+    // Rounding up matches the reference implementation: the middle slime of an odd
+    // population is attracted, not repelled
+    int half = (pop_size + 1) / 2;
     for (int rank = 0; rank < pop_size; rank++) {
       int    i      = order[rank].idx;
       double logval = log10((bF - fits[i]) / S + 1.0);

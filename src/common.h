@@ -50,7 +50,6 @@ int    rng_next_int(int lo, int hi);  // half-open: [lo, hi)
 int    rng_next_bit(void);
 
 // config.c
-void apply_field(const char* source, const char* key, const char* val);
 void validate(void);
 void dump_config(void);
 

@@ -6,7 +6,7 @@ PKG_CONFIG ?= pkg-config
 TOML_CFLAGS := $(shell $(PKG_CONFIG) --cflags libtomlc17 2>/dev/null)
 TOML_LIBS   := $(shell $(PKG_CONFIG) --libs   libtomlc17 2>/dev/null || echo -ltomlc17)
 
-CFLAGS = -Wall -Wextra -std=c11 -I$(SRCDIR) -g -D_GNU_SOURCE \
+CFLAGS = -Wall -Wextra -std=c11 -I$(SRCDIR) -g -D_GNU_SOURCE -MMD -MP \
          -finput-charset=UTF-8 -fexec-charset=UTF-8 $(TOML_CFLAGS)
 LDLIBS = -lm $(TOML_LIBS)
 
@@ -23,6 +23,7 @@ SRC    = $(SRCDIR)/main.c \
          $(SRCDIR)/algorithms/ga.c \
          $(SRCDIR)/algorithms/sma.c
 OBJ    = $(SRC:.c=.o)
+DEP    = $(OBJ:.o=.d)
 
 all: $(TARGET)
 
@@ -33,6 +34,8 @@ $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm -f $(OBJ) $(TARGET)
+	rm -f $(OBJ) $(DEP) $(TARGET)
+
+-include $(DEP)
 
 .PHONY: all clean

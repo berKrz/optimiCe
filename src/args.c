@@ -14,7 +14,7 @@ static void print_help_overview(void) {
       "  -f, --config <file>     TOML configuration file (required)\n"
       "  -i, --interactive       Pause after each iteration\n"
       "  -l, --list              List available algorithms\n"
-      "  -d, --dump-config       Serialize g_cfg after parsing and exit\n"
+      "  -d, --dump-config       Print the resolved configuration and exit\n"
       "  -h, --help [ALG]        General help, or help for a specific algorithm\n"
       "\n"
       "Common fields (valid for any algorithm):\n");
