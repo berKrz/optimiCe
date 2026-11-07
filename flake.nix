@@ -15,6 +15,7 @@
           clang-tools
           gdb
           bear
+          pkg-config
           tomlc17
         ];
       };
@@ -23,6 +24,8 @@
         pname = "optimice";
         version = "0.1.0";
         src = ./.;
+        nativeBuildInputs = [ pkgs.pkg-config ];
+        buildInputs = [ pkgs.tomlc17 ];
         buildPhase = "make";
         installPhase = ''
           mkdir -p $out/bin

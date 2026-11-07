@@ -1,5 +1,7 @@
 *.o
 optimice
+result
+result-*
 
 .clangd/
 .cache/
