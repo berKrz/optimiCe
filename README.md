@@ -25,8 +25,15 @@ optimiCe runs an optimization algorithm against a user-defined fitness function 
 ## GA
 
 - Binary genetic algorithm over an N-dimensional continuous search space: each individual carries `n_dims × ind_size` bits, with each dimension's `ind_size`-bit slice linearly decoded onto `[domain_min, domain_max]`
-- Fitness-proportional (roulette) or tournament selection; roulette shifts weights by `max − f + 1` under minimization so the direction-agnostic draw stays meaningful
-- Dimension-aware single-point crossover: the cut ratio applies independently within each dimension's slice, so no dimension is wholly swapped at once
+- Four selection operators:
+  - `roulette`: fitness-proportional, with weights shifted so the worst individual gets weight 1 (`max − f + 1` when minimizing, `f − min + 1` when maximizing). Works with negative fitness, but the `+1` is in fitness units, so selection pressure depends on the scale of the fitness values
+  - `roulette_normalized`: like `roulette`, but the shift past the worst individual is the population's average fitness spacing (`range / (pop_size − 1)`) instead of 1 fitness unit. Pressure doesn't depend on the fitness scale, and the worst individual keeps a small chance of being picked
+  - `rank`: linear ranking. Individuals are weighted by their rank alone; `rank_pressure` sets the expected number of copies of the best individual (the worst gets `2 − rank_pressure`)
+  - `tournament`: best of `tournament_size` individuals drawn at random
+- Two crossover operators:
+  - `n_point`: dimension-aware n-point crossover. `cut_points` lists the cut ratios, and they apply independently within each dimension's slice. Every cut must actually split the slice: ratios landing on bit 0, or two ratios landing on the same bit, are rejected because they'd silently yield fewer cuts than listed. Segments between cuts alternate keep / swap, starting with keep, so `[0.6]` is classic single-point and `[0.3, 0.7]` is two-point
+  - `uniform`: every bit is exchanged independently with probability 0.5
+- Optional family-competition elitism (`elitism = "family"`): after crossover and mutation, each pair keeps the best two of its two parents and two children (children win ties). An unpaired last individual keeps the better of itself and its mutant. Costs two extra fitness evaluations per pair, since parent fitness is reused from selection
 - Per-bit mutation at a configurable rate
 - `ind_size` capped at 63 so the per-dimension decode fits in a single `uint64_t`
 
@@ -144,10 +151,12 @@ pbest_init = "position"
 | `ind_size`        | int   | `22`           | Bits per dimension, in `[2, 63]`. Total bits per individual is `n_dims × ind_size`          |
 | `generations`     | int   | `30`           | Number of generations                                                                       |
 | `tournament_size` | int   | `2`            | Individuals per tournament; must be at most `pop_size`. Only used when `selection=tournament` |
-| `cut_point`       | float | `0.6`          | Cut point ratio in `(0.0, 1.0)`; the cut index is `floor(ind_size × cut_point)` per dimension |
+| `rank_pressure`   | float | `1.5`          | Expected copies of the best individual under rank selection, in `[1.0, 2.0]`: `1.0` is uniform, `2.0` never picks the worst. Only used when `selection=rank` |
+| `cut_points`      | float array | `[0.6]`  | Cut ratios for `n_point`, each in `(0.0, 1.0)` and strictly increasing; each cut index is `floor(ind_size × ratio)` per dimension, and indices must be distinct and at least 1. Only used when `crossover=n_point` |
 | `mutation_rate`   | float | `0.01`         | Per-bit flip probability in `[0.0, 1.0)`                                                    |
-| `selection`       | name  | `roulette`     | `roulette` or `tournament`                                                                  |
-| `crossover`       | name  | `single_point` | `single_point` (only option so far)                                                         |
+| `selection`       | name  | `roulette`     | `roulette`, `roulette_normalized`, `rank` or `tournament`                                   |
+| `crossover`       | name  | `n_point`      | `n_point` or `uniform`                                                                       |
+| `elitism`         | name  | `none`         | `none` or `family`                                                                           |
 
 ### SMA fields
 

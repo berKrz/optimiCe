@@ -15,7 +15,17 @@ typedef enum {
   FIELD_ENUM,
   FIELD_FN,
   FIELD_ALGORITHM,
+  FIELD_DOUBLE_LIST,  // TOML array of numbers, stored as a DoubleList
 } FieldType;
+
+// Storage for FIELD_DOUBLE_LIST. Fixed capacity so the owning config struct stays flat (no
+// allocation, copyable by value). The walker rejects arrays longer than DOUBLE_LIST_MAX
+#define DOUBLE_LIST_MAX 64
+
+typedef struct {
+  int    n;
+  double v[DOUBLE_LIST_MAX];
+} DoubleList;
 
 // Pure data row. Walker reads `type` to decide how to parse a datum, consults
 // `lookup` for FIELD_ENUM / FIELD_FN, writes the result through

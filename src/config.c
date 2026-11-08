@@ -107,6 +107,24 @@ static void set_field(const char* source, const FieldSpec* row, void* base, toml
       select_algorithm(source, d.u.s);
       return;
     }
+    case FIELD_DOUBLE_LIST: {
+      if (d.type != TOML_ARRAY) die_at(source, row->name, "expected array of numbers");
+      if (d.u.arr.size > DOUBLE_LIST_MAX) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "too many elements (max %d)", DOUBLE_LIST_MAX);
+        die_at(source, row->name, msg);
+      }
+      // Fill a local copy first so a bad element leaves the target untouched
+      DoubleList list = {.n = d.u.arr.size};
+      for (int i = 0; i < list.n; i++) {
+        toml_datum_t e = d.u.arr.elem[i];
+        if (e.type == TOML_FP64) list.v[i] = e.u.fp64;
+        else if (e.type == TOML_INT64) list.v[i] = (double) e.u.int64;
+        else die_at(source, row->name, "expected array of numbers");
+      }
+      memcpy(target, &list, sizeof(list));
+      return;
+    }
   }
 }
 
@@ -155,6 +173,10 @@ static toml_datum_t default_as_datum(const FieldSpec* row) {
       // Unreachable: caller (set_defaults) skips rows with NULL default_display,
       // and FIELD_ALGORITHM has no default
       die("internal: FIELD_ALGORITHM has no default");
+    case FIELD_DOUBLE_LIST:
+      // Unreachable: set_defaults routes list rows through set_list_default, since an array
+      // datum needs a parse result that outlives this function
+      die("internal: FIELD_DOUBLE_LIST default must go through set_list_default");
   }
   return d;  // unreachable
 }
@@ -169,9 +191,27 @@ void walk_table(const char* source, const FieldSpec* table, void* base, toml_dat
   }
 }
 
+// List defaults are written in TOML array syntax ("[0.3, 0.7]") and parsed by tomlc17 itself,
+// wrapped as "v = <default>"
+// The parse result owns the array, so it's freed only after set_field has copied the values out
+static void set_list_default(const FieldSpec* row, void* base) {
+  char src[256];
+  int  len = snprintf(src, sizeof(src), "v = %s", row->default_display);
+  if (len < 0 || len >= (int) sizeof(src)) die_at("default", row->name, "default_display too long");
+
+  toml_result_t res = toml_parse(src, len);
+  if (!res.ok) die_at("default", row->name, "malformed default_display (expected TOML array)");
+  set_field("default", row, base, toml_seek(res.toptab, "v"));
+  toml_free(res);
+}
+
 void set_defaults(const FieldSpec* table, void* base) {
   for (int i = 0; table[i].name; i++) {
     if (!table[i].default_display) continue;
+    if (table[i].type == FIELD_DOUBLE_LIST) {
+      set_list_default(&table[i], base);
+      continue;
+    }
     toml_datum_t d = default_as_datum(&table[i]);
     set_field("default", &table[i], base, d);
   }
@@ -197,13 +237,14 @@ const FieldSpec common_fields[] = {
 
 static const char* type_label(FieldType t) {
   switch (t) {
-    case FIELD_INT:       return "int";
-    case FIELD_UINT:      return "uint32";
-    case FIELD_DOUBLE:    return "float";
-    case FIELD_BOOL:      return "bool";
-    case FIELD_ENUM:      return "enum";
-    case FIELD_FN:        return "name";
-    case FIELD_ALGORITHM: return "name";
+    case FIELD_INT:         return "int";
+    case FIELD_UINT:        return "uint32";
+    case FIELD_DOUBLE:      return "float";
+    case FIELD_BOOL:        return "bool";
+    case FIELD_ENUM:        return "enum";
+    case FIELD_FN:          return "name";
+    case FIELD_ALGORITHM:   return "name";
+    case FIELD_DOUBLE_LIST: return "float[]";
   }
   return "?";
 }
