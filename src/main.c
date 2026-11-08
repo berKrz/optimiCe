@@ -28,7 +28,7 @@ const Algorithm algorithms[] = {
 };
 
 int main(int argc, char** argv) {
-  set_defaults(common_fields, &g_cfg);
+  set_defaults(runner_fields, &g_cfg);
   parse_args(argc, argv);
   if (g_cfg.interactive) clear_screen();
   g_cfg.algorithm->run();

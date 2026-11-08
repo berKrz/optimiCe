@@ -117,10 +117,11 @@ pbest_init = "position"
 ### Syntax
 
 - Lines starting with `#` are comments. Blank lines are ignored.
-- Keys accept either `-` or `_` as a separator: `swarm_size` and `swarm-size` are equivalent.
-- `algorithm` must be the first non-comment key and must appear exactly once. Setting it loads that algorithm's defaults and unlocks its fields.
-- All other keys follow last-write-wins: repeating a key overrides the earlier value.
-- Unknown keys produce a hard error at startup, naming the `file:line` and key.
+- Keys are written exactly as listed in the tables below, with underscores (`swarm_size`, not `swarm-size`).
+- Each key may appear only once per section. TOML rejects duplicates at parse time.
+- Values are typed: `int` fields take integers (`30`, not `30.0`), `float` fields take floats or integers (`5` is read as `5.0`), and `enum` / `name` fields take quoted strings (`"sphere"`).
+- Unknown keys, wrongly typed values, and keys in the wrong section are hard errors at startup. Messages name the file, section, and key, e.g. `Error at 'example.toml [[run]]' [swarm-size]: unknown key for algorithm 'pso'`.
+- Range and cross-field checks run after the whole file is read: `domain_min < domain_max`, each fitness function's `n_dims` and domain requirements, and each algorithm's own constraints.
 
 ### Common fields
 

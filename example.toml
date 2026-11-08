@@ -1,15 +1,50 @@
-# optimice example config - minimal SMA run
+# optimiCe example config
+#
+# [common] holds settings shared by every run; a [[run]] may override any of them except seed
+# This version runs exactly one [[run]]: the PSO block below is active, and the GA and SMA blocks
+# after it are alternatives
+#To try one, comment out the active block and uncomment another
+# Run `optimice --help` and `optimice --help <algorithm>` for every field and its default
 
 [common]
-n_dims = 2
-fitness = "rosenbrock"
+fitness = "rastrigin"
 direction = "minimize"
-domain_min = -5.0
-domain_max = 5.0
-iterations = 100
-# seed     = 42
+n_dims = 10
+domain_min = -5.12
+domain_max = 5.12
+iterations = 5000      # iteration budget (generations, for GA)
+target_fitness = 1e-5  # stop early once the best is at least this good
+stagnation = 100       # stop early after 100 iterations without improvement
+seed = 42              # set to reproduce a run; when omitted, one is generated and printed
 
+# --- PSO ------------------------------------------------------------------------------------
 [[run]]
-algorithm = "sma"
-pop_size = 30
-z = 0.03
+algorithm = "pso"
+swarm_size = 30
+w = 0.9                 # inertia at the first iteration...
+w_end = 0.4             # ...decaying linearly to this at the last (omit for constant inertia)
+v_max = 0.2             # velocity cap, as a fraction of the domain width (0 = off)
+c1 = 2.0
+c2 = 2.0
+pbest_init = "position"
+gbest_update = "async"  # or "sync": refresh gbest once per iteration
+bounds = "reflect"      # or "clamp" / "random"
+
+# --- GA -------------------------------------------------------------------------------------
+# [[run]]
+# algorithm     = "ga"
+# pop_size      = 40
+# ind_size      = 16                  # bits per dimension
+# mutation_rate = 0.01
+# selection     = "rank"              # or "roulette" / "roulette_normalized" / "tournament"
+# rank_pressure = 1.5                 # used by rank: expected copies of the best, in [1, 2]
+# crossover     = "n_point"           # or "uniform"
+# cut_points    = [0.3, 0.7]          # used by n_point: [0.6] is classic single-point
+# elitism       = "family"            # each pair keeps the best 2 of parents + children
+
+# --- SMA ------------------------------------------------------------------------------------
+# [[run]]
+# algorithm = "sma"
+# pop_size  = 30
+# z         = 0.03                    # per-slime probability of a full random re-init
+# bounds    = "reflect"               # or "clamp" / "random"

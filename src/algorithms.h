@@ -27,13 +27,30 @@ typedef struct {
   double v[DOUBLE_LIST_MAX];
 } DoubleList;
 
+// Config sections, one bit each
+// The walker is always in exactly one section; a field's scope is the OR of the sections it may
+// appear in. --help groups fields by scope, and the walker rejects a key whose scope lacks the
+// current section's bit
+typedef enum {
+  SECTION_COMMON = 1 << 0,  // [common]
+  SECTION_RUN    = 1 << 1,  // [[run]]
+} Section;
+
+// Named scopes for the masks most rows share
+enum {
+  SCOPE_GLOBAL = SECTION_COMMON | SECTION_RUN,  // a [[run]] value overrides [common]
+  SCOPE_ALGO   = SECTION_RUN,                   // every algorithm field
+};
+
 // Pure data row. Walker reads `type` to decide how to parse a datum, consults
 // `lookup` for FIELD_ENUM / FIELD_FN, writes the result through
-// `base + offset` where `base` is the pointer passed to walk_table
+// `base + offset`, where `base` is &g_cfg for runner_fields and the algorithm's cfg_base() for its
+// own fields
 typedef struct FieldSpec {
   const char* name;
   FieldType   type;
-  size_t      offset;           // relative to walk_table's `base` arg
+  unsigned    scope;            // OR of the Sections this field may appear in
+  size_t      offset;           // relative to the table's base
   const void* lookup;           // FIELD_ENUM / FIELD_FN table, NULL otherwise
   const char* default_display;  // parsed back through the walker in the defaults pass
   const char* description;
@@ -73,22 +90,26 @@ extern const EnumEntry bounds_table[];
 // `v` is the matching velocity component, or NULL for algorithms without one
 void apply_bounds(double* x, double* v, BoundsMode mode);
 
-// Walks `table` against `src` (a TOML_TABLE datum), writing each matching field
-// through `base + offset`. Pass `&g_cfg` as `base` for common_fields, or the
-// return of `g_cfg.algorithm->cfg_base()` for an algorithm's own fields
-void walk_table(const char* source, const FieldSpec* table, void* base, toml_datum_t src);
+// Walks the keys of `tab` (a TOML_TABLE datum) in file order, resolving each against runner_fields
+// (written into g_cfg) and, when `algo` is given, the algorithm's own fields (written into its cfg)
+// Dies on unknown keys and on keys whose scope excludes `section`
+// `algorithm` itself is skipped: toml.c's pre-pass resolves it before any walk
+void walk_section(const char* source, Section section, toml_datum_t tab, const Algorithm* algo);
 
-void print_help_from_table(const FieldSpec* table);
+// Prints the rows of `table` whose scope is exactly `scope`
+void print_help_from_table(const FieldSpec* table, unsigned scope);
+
+// Writes the sections in `scope` as text, e.g. "[common] or [[run]]"
+void scope_text(unsigned scope, char* buf, size_t size);
 void set_defaults(const FieldSpec* table, void* base);
 
-// Resolves `name` against `algorithms[]`, sets g_cfg.algorithm, loads its defaults
-// Idempotent: calling twice with the same name is a no-op
-// Called by toml.c's algorithm pre-pass and by the walker's FIELD_ALGORITHM case
+// Resolves `name` against `algorithms[]`, sets g_cfg.algorithm, and loads its defaults, every time
+// it's called. toml.c's pre-pass is the only caller
 void select_algorithm(const char* source, const char* name);
 
-// Common fields - defined in config.c
+// Fields that belong to the runner rather than to any algorithm - defined in config.c
 // Declared here because the full FieldSpec type is only visible after this header
-extern const FieldSpec common_fields[];
+extern const FieldSpec runner_fields[];
 
 // PSO
 extern const FieldSpec pso_fields[];

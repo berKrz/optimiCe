@@ -4,33 +4,6 @@
 #include "algorithms.h"
 #include "common.h"
 
-// --- Helpers ---
-
-static int key_in_table(const char* key, const FieldSpec* table) {
-  for (int i = 0; table[i].name; i++)
-    if (strcmp(key, table[i].name) == 0) return 1;
-  return 0;
-}
-
-// Dies if `key` is present in `tbl`. Used to enforce "field X must live in
-// section Y, not here" schema rules (algorithm in [common], seed in [[run]])
-static void require_absent(const char* source, toml_datum_t tbl, const char* key,
-                           const char* reason) {
-  if (toml_seek(tbl, key).type != TOML_UNKNOWN) die_at(source, key, reason);
-}
-
-// Walks the TOML table's own keys, dying on the first one that is not in `t1`
-// (or `t2`, if given). `t2` may be NULL for single-table checks
-static void check_no_unknown_keys(const char* source, toml_datum_t tbl, const FieldSpec* t1,
-                                  const FieldSpec* t2) {
-  for (int i = 0; i < tbl.u.tab.size; i++) {
-    const char* key = tbl.u.tab.key[i];
-    if (key_in_table(key, t1)) continue;
-    if (t2 && key_in_table(key, t2)) continue;
-    die_at(source, key, "unknown key");
-  }
-}
-
 // --- Entry point ---
 
 void parse_toml(const char* filename) {
@@ -71,13 +44,7 @@ void parse_toml(const char* filename) {
 
   char common_src[256], run_src[256];
   snprintf(common_src, sizeof(common_src), "%s [common]", filename);
-  snprintf(run_src, sizeof(run_src), "%s [run]", filename);
-
-  // --- Schema checks (fields pinned to one section) ---
-
-  if (common.type == TOML_TABLE)
-    require_absent(common_src, common, "algorithm", "'algorithm' must be in [[run]], not [common]");
-  require_absent(run_src, run0, "seed", "'seed' must be in [common], not [[run]]");
+  snprintf(run_src, sizeof(run_src), "%s [[run]]", filename);
 
   // --- Resolve algorithm first so its defaults land before field overlays ---
 
@@ -87,21 +54,16 @@ void parse_toml(const char* filename) {
   select_algorithm(run_src, alg.u.s);
 
   // --- Apply [common] then [[run]] (last-write-wins) ---
+  // The walker also rejects unknown keys and keys in the wrong section
 
-  if (common.type == TOML_TABLE) walk_table(common_src, common_fields, &g_cfg, common);
-  walk_table(run_src, common_fields, &g_cfg, run0);
-  walk_table(run_src, g_cfg.algorithm->fields, g_cfg.algorithm->cfg_base(), run0);
-
-  // --- Unknown-key checks ---
-
-  if (common.type == TOML_TABLE) check_no_unknown_keys(common_src, common, common_fields, NULL);
-  check_no_unknown_keys(run_src, run0, common_fields, g_cfg.algorithm->fields);
+  if (common.type == TOML_TABLE) walk_section(common_src, SECTION_COMMON, common, NULL);
+  walk_section(run_src, SECTION_RUN, run0, g_cfg.algorithm);
 
   // --- Validate ---
 
   validate();
 
-  // --- Seed: user-set anywhere? (strictly in [common] by schema) ---
+  // --- Seed: user-set? (scope keeps it in [common]) ---
 
   int seed_set = (common.type == TOML_TABLE) && (toml_seek(common, "seed").type != TOML_UNKNOWN);
   if (seed_set) rng_init_with(g_cfg.seed);

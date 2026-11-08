@@ -41,22 +41,23 @@ static const EnumEntry gbest_update_table[] = {
 };
 
 const FieldSpec pso_fields[] = {
-    {"swarm_size", FIELD_INT, offsetof(PsoConfig, swarm_size), NULL, "30", "Swarm size"},
-    {"w", FIELD_DOUBLE, offsetof(PsoConfig, w), NULL, "1.0",
+    {"swarm_size", FIELD_INT, SCOPE_ALGO, offsetof(PsoConfig, swarm_size), NULL, "30",
+     "Swarm size"},
+    {"w", FIELD_DOUBLE, SCOPE_ALGO, offsetof(PsoConfig, w), NULL, "1.0",
      "Inertia weight (at the first iteration)"},
-    {"w_end", FIELD_DOUBLE, offsetof(PsoConfig, w_end), NULL, "nan",
+    {"w_end", FIELD_DOUBLE, SCOPE_ALGO, offsetof(PsoConfig, w_end), NULL, "nan",
      "Inertia at the last iteration, linear decay from w (unset = w)"},
-    {"v_max", FIELD_DOUBLE, offsetof(PsoConfig, v_max), NULL, "0.0",
+    {"v_max", FIELD_DOUBLE, SCOPE_ALGO, offsetof(PsoConfig, v_max), NULL, "0.0",
      "Velocity cap, fraction of domain width (0 = off)"},
-    {"c1", FIELD_DOUBLE, offsetof(PsoConfig, c1), NULL, "2.0", "Cognitive coefficient"},
-    {"c2", FIELD_DOUBLE, offsetof(PsoConfig, c2), NULL, "2.0", "Social coefficient"},
-    {"pbest_init", FIELD_ENUM, offsetof(PsoConfig, pbest_init), pbest_init_table, "position",
-     "pbest init: position | random"},
-    {"gbest_update", FIELD_ENUM, offsetof(PsoConfig, gbest_update), gbest_update_table, "async",
-     "gbest update: async | sync"},
-    {"bounds", FIELD_ENUM, offsetof(PsoConfig, bounds), bounds_table, "clamp",
+    {"c1", FIELD_DOUBLE, SCOPE_ALGO, offsetof(PsoConfig, c1), NULL, "2.0", "Cognitive coefficient"},
+    {"c2", FIELD_DOUBLE, SCOPE_ALGO, offsetof(PsoConfig, c2), NULL, "2.0", "Social coefficient"},
+    {"pbest_init", FIELD_ENUM, SCOPE_ALGO, offsetof(PsoConfig, pbest_init), pbest_init_table,
+     "position", "pbest init: position | random"},
+    {"gbest_update", FIELD_ENUM, SCOPE_ALGO, offsetof(PsoConfig, gbest_update), gbest_update_table,
+     "async", "gbest update: async | sync"},
+    {"bounds", FIELD_ENUM, SCOPE_ALGO, offsetof(PsoConfig, bounds), bounds_table, "clamp",
      "Out-of-domain handling: clamp | reflect | random"},
-    {NULL, 0, 0, NULL, NULL, NULL},
+    {NULL, 0, 0, 0, NULL, NULL, NULL},
 };
 
 void* pso_cfg_base(void) { return &cfg; }

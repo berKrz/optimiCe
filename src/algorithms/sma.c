@@ -21,12 +21,13 @@ static _Thread_local SmaConfig cfg;
 // --- Field table ---
 
 const FieldSpec sma_fields[] = {
-    {"pop_size", FIELD_INT, offsetof(SmaConfig, pop_size), NULL, "30", "Population size"},
-    {"z", FIELD_DOUBLE, offsetof(SmaConfig, z), NULL, "0.03",
+    {"pop_size", FIELD_INT, SCOPE_ALGO, offsetof(SmaConfig, pop_size), NULL, "30",
+     "Population size"},
+    {"z", FIELD_DOUBLE, SCOPE_ALGO, offsetof(SmaConfig, z), NULL, "0.03",
      "Full re-init probability (per slime)"},
-    {"bounds", FIELD_ENUM, offsetof(SmaConfig, bounds), bounds_table, "clamp",
+    {"bounds", FIELD_ENUM, SCOPE_ALGO, offsetof(SmaConfig, bounds), bounds_table, "clamp",
      "Out-of-domain handling: clamp | reflect | random"},
-    {NULL, 0, 0, NULL, NULL, NULL},
+    {NULL, 0, 0, 0, NULL, NULL, NULL},
 };
 
 void* sma_cfg_base(void) { return &cfg; }

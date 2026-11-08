@@ -33,7 +33,6 @@ static const FitnessEntry* get_fitness_entry(double (*fn)(const double*)) {
 void select_algorithm(const char* source, const char* name) {
   for (int i = 0; algorithms[i].name; i++) {
     if (strcmp(name, algorithms[i].name) == 0) {
-      if (g_cfg.algorithm == &algorithms[i]) return;  // idempotent re-select
       g_cfg.algorithm = &algorithms[i];
       set_defaults(algorithms[i].fields, algorithms[i].cfg_base());
       return;
@@ -96,11 +95,9 @@ static void set_field(const char* source, const FieldSpec* row, void* base, toml
       }
       die_at(source, row->name, "unknown fitness function");
     }
-    case FIELD_ALGORITHM: {
-      if (d.type != TOML_STRING) die_at(source, row->name, "expected string");
-      select_algorithm(source, d.u.s);
-      return;
-    }
+    case FIELD_ALGORITHM:
+      // Unreachable: walk_section skips the algorithm row, which toml.c's pre-pass resolves
+      die("internal: FIELD_ALGORITHM reached set_field");
     case FIELD_DOUBLE_LIST: {
       if (d.type != TOML_ARRAY) die_at(source, row->name, "expected array of numbers");
       if (d.u.arr.size > DOUBLE_LIST_MAX) {
@@ -177,11 +174,72 @@ static toml_datum_t default_as_datum(const FieldSpec* row) {
 
 // --- Public walkers ---
 
-void walk_table(const char* source, const FieldSpec* table, void* base, toml_datum_t src) {
-  for (int i = 0; table[i].name; i++) {
-    toml_datum_t d = toml_seek(src, table[i].name);
-    if (d.type == TOML_UNKNOWN) continue;  // not set-> leave target alone
-    set_field(source, &table[i], base, d);
+static const FieldSpec* find_row(const FieldSpec* table, const char* key) {
+  for (int i = 0; table[i].name; i++)
+    if (strcmp(key, table[i].name) == 0) return &table[i];
+  return NULL;
+}
+
+void scope_text(unsigned scope, char* buf, size_t size) {
+  static const struct {
+    unsigned    bit;
+    const char* name;
+  } names[] = {
+      {SECTION_COMMON, "[common]"},
+      {SECTION_RUN,    "[[run]]" },
+  };
+  size_t n = 0;
+  buf[0]   = '\0';
+  for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+    if (!(scope & names[i].bit)) continue;
+    n +=
+        (size_t) snprintf(buf + n, n < size ? size - n : 0, "%s%s", n ? " or " : "", names[i].name);
+  }
+}
+
+// Unknown-key error, with a hint when the key exists somewhere else
+static void die_unknown(const char* source, const char* key, Section section,
+                        const Algorithm* algo) {
+  char msg[160];
+  if (section == SECTION_RUN) {
+    snprintf(msg, sizeof(msg), "unknown key for algorithm '%s'", algo->name);
+    die_at(source, key, msg);
+  }
+  for (int i = 0; algorithms[i].name; i++) {
+    if (find_row(algorithms[i].fields, key)) {
+      snprintf(msg, sizeof(msg),
+               "'%s' is a field of algorithm '%s'; algorithm fields go in [[run]]", key,
+               algorithms[i].name);
+      die_at(source, key, msg);
+    }
+  }
+  die_at(source, key, "unknown key");
+}
+
+void walk_section(const char* source, Section section, toml_datum_t tab, const Algorithm* algo) {
+  for (int i = 0; i < tab.u.tab.size; i++) {
+    const char*      key  = tab.u.tab.key[i];
+    const FieldSpec* row  = find_row(runner_fields, key);
+    const FieldSpec* arow = algo ? find_row(algo->fields, key) : NULL;
+    void*            base = &g_cfg;
+
+    if (row && arow)
+      die_at(source, key, "internal: key defined by both the runner and the algorithm");
+    if (arow) {
+      row  = arow;
+      base = algo->cfg_base();
+    }
+    if (!row) die_unknown(source, key, section, algo);
+
+    if (!(row->scope & section)) {
+      char where[64], msg[96];
+      scope_text(row->scope, where, sizeof(where));
+      snprintf(msg, sizeof(msg), "only allowed in %s", where);
+      die_at(source, key, msg);
+    }
+
+    if (row->type == FIELD_ALGORITHM) continue;  // resolved by toml.c's pre-pass
+    set_field(source, row, base, tab.u.tab.value[i]);
   }
 }
 
@@ -211,26 +269,30 @@ void set_defaults(const FieldSpec* table, void* base) {
   }
 }
 
-// --- Common field table ---
+// --- Runner field table ---
 
-const FieldSpec common_fields[] = {
-    {"algorithm", FIELD_ALGORITHM, 0, NULL, NULL, "Algorithm to run: pso | ga | sma"},
-    {"seed", FIELD_UINT, offsetof(Config, seed), NULL, NULL, "RNG seed (omitted = generated)"},
-    {"direction", FIELD_ENUM, offsetof(Config, direction), direction_table, "minimize",
-     "Direction: minimize | maximize"},
-    {"n_dims", FIELD_INT, offsetof(Config, n_dims), NULL, "2", "Number of dimensions"},
-    {"iterations", FIELD_INT, offsetof(Config, iterations), NULL, "100",
+// Row order is --help order: [common]-only fields first, [[run]]-only last
+const FieldSpec runner_fields[] = {
+    {"seed", FIELD_UINT, SECTION_COMMON, offsetof(Config, seed), NULL, NULL,
+     "RNG seed (omitted = generated)"},
+    {"direction", FIELD_ENUM, SCOPE_GLOBAL, offsetof(Config, direction), direction_table,
+     "minimize", "Direction: minimize | maximize"},
+    {"n_dims", FIELD_INT, SCOPE_GLOBAL, offsetof(Config, n_dims), NULL, "2",
+     "Number of dimensions"},
+    {"iterations", FIELD_INT, SCOPE_GLOBAL, offsetof(Config, iterations), NULL, "100",
      "Iteration budget (generations, for GA)"},
-    {"target_fitness", FIELD_DOUBLE, offsetof(Config, target_fitness), NULL, "nan",
+    {"target_fitness", FIELD_DOUBLE, SCOPE_GLOBAL, offsetof(Config, target_fitness), NULL, "nan",
      "Stop early once the best reaches this value"},
-    {"stagnation", FIELD_INT, offsetof(Config, stagnation), NULL, "0",
+    {"stagnation", FIELD_INT, SCOPE_GLOBAL, offsetof(Config, stagnation), NULL, "0",
      "Stop early after N iterations without improvement (0 = off)"},
-    {"domain_min", FIELD_DOUBLE, offsetof(Config, domain_min), NULL, "-5.0",
+    {"domain_min", FIELD_DOUBLE, SCOPE_GLOBAL, offsetof(Config, domain_min), NULL, "-5.0",
      "Lower bound of the domain"},
-    {"domain_max", FIELD_DOUBLE, offsetof(Config, domain_max), NULL, "5.0",
+    {"domain_max", FIELD_DOUBLE, SCOPE_GLOBAL, offsetof(Config, domain_max), NULL, "5.0",
      "Upper bound of the domain"},
-    {"fitness", FIELD_FN, offsetof(Config, fitness_fn), NULL, "sphere", "Fitness function"},
-    {NULL, 0, 0, NULL, NULL, NULL},
+    {"fitness", FIELD_FN, SCOPE_GLOBAL, offsetof(Config, fitness_fn), NULL, "sphere",
+     "Fitness function"},
+    {"algorithm", FIELD_ALGORITHM, SECTION_RUN, 0, NULL, NULL, "Algorithm to run: pso | ga | sma"},
+    {NULL, 0, 0, 0, NULL, NULL, NULL},
 };
 
 // --- Help printer ---
@@ -258,8 +320,9 @@ static const char* get_default_display(const FieldSpec* f) {
   return "-";
 }
 
-void print_help_from_table(const FieldSpec* table) {
+void print_help_from_table(const FieldSpec* table, unsigned scope) {
   for (int i = 0; table[i].name; i++) {
+    if (table[i].scope != scope) continue;
     printf("  %-16s  %-7s  (default: %-14s)  %s\n", table[i].name, type_label(table[i].type),
            get_default_display(&table[i]), table[i].description ? table[i].description : "");
   }

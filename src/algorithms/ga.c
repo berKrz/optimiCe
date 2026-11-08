@@ -77,23 +77,25 @@ static const EnumEntry crossover_table[] = {
 // --- Field table ---
 
 const FieldSpec ga_fields[] = {
-    {"pop_size", FIELD_INT, offsetof(GaConfig, pop_size), NULL, "15", "Population size (>= 2)"},
-    {"ind_size", FIELD_INT, offsetof(GaConfig, ind_size), NULL, "22", "Bits per dimension [2, 63]"},
-    {"tournament_size", FIELD_INT, offsetof(GaConfig, tournament_size), NULL, "2",
+    {"pop_size", FIELD_INT, SCOPE_ALGO, offsetof(GaConfig, pop_size), NULL, "15",
+     "Population size (>= 2)"},
+    {"ind_size", FIELD_INT, SCOPE_ALGO, offsetof(GaConfig, ind_size), NULL, "22",
+     "Bits per dimension [2, 63]"},
+    {"tournament_size", FIELD_INT, SCOPE_ALGO, offsetof(GaConfig, tournament_size), NULL, "2",
      "Individuals per tournament"},
-    {"rank_pressure", FIELD_DOUBLE, offsetof(GaConfig, rank_pressure), NULL, "1.5",
+    {"rank_pressure", FIELD_DOUBLE, SCOPE_ALGO, offsetof(GaConfig, rank_pressure), NULL, "1.5",
      "Rank selection pressure in [1.0, 2.0]"},
-    {"cut_points", FIELD_DOUBLE_LIST, offsetof(GaConfig, cut_points), NULL, "[0.6]",
+    {"cut_points", FIELD_DOUBLE_LIST, SCOPE_ALGO, offsetof(GaConfig, cut_points), NULL, "[0.6]",
      "n_point cut ratios in (0.0, 1.0), increasing"},
-    {"mutation_rate", FIELD_DOUBLE, offsetof(GaConfig, mutation_rate), NULL, "0.01",
+    {"mutation_rate", FIELD_DOUBLE, SCOPE_ALGO, offsetof(GaConfig, mutation_rate), NULL, "0.01",
      "Per-bit flip rate in [0.0, 1.0)"},
-    {"selection", FIELD_ENUM, offsetof(GaConfig, selection), selection_table, "roulette",
-     "Selection: roulette | roulette_normalized | rank | tournament"},
-    {"crossover", FIELD_ENUM, offsetof(GaConfig, crossover), crossover_table, "n_point",
+    {"selection", FIELD_ENUM, SCOPE_ALGO, offsetof(GaConfig, selection), selection_table,
+     "roulette", "Selection: roulette | roulette_normalized | rank | tournament"},
+    {"crossover", FIELD_ENUM, SCOPE_ALGO, offsetof(GaConfig, crossover), crossover_table, "n_point",
      "Crossover: n_point | uniform"},
-    {"elitism", FIELD_ENUM, offsetof(GaConfig, elitism), elitism_table, "none",
+    {"elitism", FIELD_ENUM, SCOPE_ALGO, offsetof(GaConfig, elitism), elitism_table, "none",
      "Elitism: none | family"},
-    {NULL, 0, 0, NULL, NULL, NULL},
+    {NULL, 0, 0, 0, NULL, NULL, NULL},
 };
 
 void* ga_cfg_base(void) { return &cfg; }

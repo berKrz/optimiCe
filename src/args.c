@@ -6,6 +6,26 @@
 #include "algorithms.h"
 #include "common.h"
 
+// One group per distinct scope, in order of first appearance in runner_fields
+static void print_runner_fields(void) {
+  for (int i = 0; runner_fields[i].name; i++) {
+    unsigned scope = runner_fields[i].scope;
+    int      seen  = 0;
+    for (int j = 0; j < i; j++) seen |= runner_fields[j].scope == scope;
+    if (seen) continue;
+
+    char where[64];
+    scope_text(scope, where, sizeof(where));
+    int single   = (scope & (scope - 1)) == 0;  // exactly one section bit
+    int override = (scope & SCOPE_GLOBAL) == SCOPE_GLOBAL;
+    printf("\nFields in %s%s:\n", where,
+           single   ? " only" :
+           override ? " (a [[run]] value overrides [common])" :
+                      "");
+    print_help_from_table(runner_fields, scope);
+  }
+}
+
 static void print_help_overview(void) {
   printf(
       "Usage: optimice -f <file.toml> [options]\n"
@@ -15,10 +35,8 @@ static void print_help_overview(void) {
       "  -i, --interactive       Pause after each iteration\n"
       "  -l, --list              List available algorithms\n"
       "  -d, --dump-config       Print the resolved configuration and exit\n"
-      "  -h, --help [ALG]        General help, or help for a specific algorithm\n"
-      "\n"
-      "Common fields (valid for any algorithm):\n");
-  print_help_from_table(common_fields);
+      "  -h, --help [ALG]        General help, or help for a specific algorithm\n");
+  print_runner_fields();
   printf("\nAlgorithms:\n");
   for (int i = 0; algorithms[i].name; i++) printf("  %s\n", algorithms[i].name);
   printf("\nUse --help ALG to see an algorithm's fields.\n");
@@ -27,8 +45,12 @@ static void print_help_overview(void) {
 static void print_help_algorithm(const char* name) {
   for (int i = 0; algorithms[i].name; i++) {
     if (strcmp(name, algorithms[i].name) == 0) {
-      printf("Fields for algorithm '%s' (configure via TOML):\n", name);
-      print_help_from_table(algorithms[i].fields);
+      char where[64];
+      scope_text(SCOPE_ALGO, where, sizeof(where));
+      int single = (SCOPE_ALGO & (SCOPE_ALGO - 1)) == 0;
+      printf("Fields for algorithm '%s' (%s%s%s):\n", name, single ? "" : "in ", where,
+             single ? " only" : "");
+      print_help_from_table(algorithms[i].fields, SCOPE_ALGO);
       return;
     }
   }
