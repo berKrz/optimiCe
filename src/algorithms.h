@@ -57,6 +57,22 @@ typedef struct Algorithm {
 
 extern const Algorithm algorithms[];
 
+// Reverse lookup: the name a table maps to `value`, or "?" if none does (utils.c)
+const char* enum_name(const EnumEntry* table, int value);
+
+// bounds.c - out-of-domain handling shared by continuous-position algorithms
+// clamp pins the coordinate to the violated bound, reflect mirrors it back inside (bouncing as
+// many times as needed), random redraws it uniformly in the domain
+// When a velocity is given (v != NULL), clamp and random zero it and reflect flips its sign on an
+// odd number of bounces
+typedef enum { BOUNDS_CLAMP, BOUNDS_REFLECT, BOUNDS_RANDOM } BoundsMode;
+
+extern const EnumEntry bounds_table[];
+
+// Brings one coordinate back into [domain_min, domain_max]; no-op when already inside
+// `v` is the matching velocity component, or NULL for algorithms without one
+void apply_bounds(double* x, double* v, BoundsMode mode);
+
 // Walks `table` against `src` (a TOML_TABLE datum), writing each matching field
 // through `base + offset`. Pass `&g_cfg` as `base` for common_fields, or the
 // return of `g_cfg.algorithm->cfg_base()` for an algorithm's own fields

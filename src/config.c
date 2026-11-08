@@ -28,12 +28,6 @@ static const FitnessEntry* get_fitness_entry(double (*fn)(const double*)) {
   return NULL;  // set_field guarantees a match; unreachable
 }
 
-static const char* direction_name(OptDirection d) {
-  for (int i = 0; direction_table[i].name; i++)
-    if ((OptDirection) direction_table[i].value == d) return direction_table[i].name;
-  return "?";
-}
-
 // --- Algorithm selection ---
 
 void select_algorithm(const char* source, const char* name) {
@@ -250,6 +244,8 @@ static const char* type_label(FieldType t) {
 }
 
 static const char* get_default_display(const FieldSpec* f) {
+  // A "nan" default marks an optional float that's resolved after parsing (e.g. w_end = w)
+  if (f->default_display && strcmp(f->default_display, "nan") == 0) return "(unset)";
   if (f->default_display) return f->default_display;
   if (strcmp(f->name, "algorithm") == 0) return "(required)";
   if (strcmp(f->name, "seed") == 0) return "(generated)";
@@ -300,7 +296,7 @@ void dump_config(void) {
   printf("# resolved config\n");
   printf("algorithm   = %s\n", g_cfg.algorithm ? g_cfg.algorithm->name : "(unset)");
   printf("seed        = 0x%08x\n", g_cfg.seed);
-  printf("direction   = %s\n", direction_name(g_cfg.direction));
+  printf("direction   = %s\n", enum_name(direction_table, g_cfg.direction));
   printf("n_dims      = %d\n", g_cfg.n_dims);
   printf("domain_min  = %g\n", g_cfg.domain_min);
   printf("domain_max  = %g\n", g_cfg.domain_max);

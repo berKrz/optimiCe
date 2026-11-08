@@ -11,9 +11,10 @@
 // --- SMA-private config state ---
 
 typedef struct {
-  int    pop_size;
-  int    iterations;
-  double z;  // per-slime probability of full random re-init
+  int        pop_size;
+  int        iterations;
+  double     z;  // per-slime probability of full random re-init
+  BoundsMode bounds;
 } SmaConfig;
 
 static _Thread_local SmaConfig cfg;
@@ -25,6 +26,8 @@ const FieldSpec sma_fields[] = {
     {"iterations", FIELD_INT, offsetof(SmaConfig, iterations), NULL, "100", "Number of iterations"},
     {"z", FIELD_DOUBLE, offsetof(SmaConfig, z), NULL, "0.03",
      "Full re-init probability (per slime)"},
+    {"bounds", FIELD_ENUM, offsetof(SmaConfig, bounds), bounds_table, "clamp",
+     "Out-of-domain handling: clamp | reflect | random"},
     {NULL, 0, 0, NULL, NULL, NULL},
 };
 
@@ -44,6 +47,7 @@ void sma_dump(void) {
   printf("pop_size   = %d\n", cfg.pop_size);
   printf("iterations = %d\n", cfg.iterations);
   printf("z          = %g\n", cfg.z);
+  printf("bounds     = %s\n", enum_name(bounds_table, cfg.bounds));
 }
 
 // --- Fitness ranking ---
@@ -188,12 +192,8 @@ void sma_run(void) {
         }
       }
 
-      // Bring back to boundaries (the re-init branch is already in bounds; cheap to clamp
-      // uniformly)
-      for (int d = 0; d < n; d++) {
-        if (positions[i * n + d] < g_cfg.domain_min) positions[i * n + d] = g_cfg.domain_min;
-        else if (positions[i * n + d] > g_cfg.domain_max) positions[i * n + d] = g_cfg.domain_max;
-      }
+      // Bring back into the domain (the re-init branch is already inside, so it's a no-op there)
+      for (int d = 0; d < n; d++) apply_bounds(&positions[i * n + d], NULL, cfg.bounds);
 
       fits[i] = g_cfg.fitness_fn(positions + i * n);
 

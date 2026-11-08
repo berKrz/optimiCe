@@ -167,18 +167,6 @@ void ga_validate(void) {
 
 // --- Dump ---
 
-static const char* selection_name(SelectionKind s) {
-  for (int i = 0; selection_table[i].name; i++)
-    if ((SelectionKind) selection_table[i].value == s) return selection_table[i].name;
-  return "(unknown)";
-}
-
-static const char* crossover_name(CrossoverKind c) {
-  for (int i = 0; crossover_table[i].name; i++)
-    if ((CrossoverKind) crossover_table[i].value == c) return crossover_table[i].name;
-  return "(unknown)";
-}
-
 void ga_dump(void) {
   printf("pop_size        = %d\n", cfg.pop_size);
   printf("ind_size        = %d\n", cfg.ind_size);
@@ -189,9 +177,9 @@ void ga_dump(void) {
   for (int i = 0; i < cfg.cut_points.n; i++) printf(i ? ", %g" : "%g", cfg.cut_points.v[i]);
   printf("]\n");
   printf("mutation_rate   = %g\n", cfg.mutation_rate);
-  printf("selection       = %s\n", selection_name(cfg.selection));
-  printf("crossover       = %s\n", crossover_name(cfg.crossover));
-  printf("elitism         = %s\n", cfg.elitism == ELITISM_FAMILY ? "family" : "none");
+  printf("selection       = %s\n", enum_name(selection_table, cfg.selection));
+  printf("crossover       = %s\n", enum_name(crossover_table, cfg.crossover));
+  printf("elitism         = %s\n", enum_name(elitism_table, cfg.elitism));
 }
 
 // --- Decode / eval ---

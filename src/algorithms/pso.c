@@ -1,4 +1,5 @@
 #include <float.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,14 +10,19 @@
 // --- PSO-private config state ---
 
 typedef enum { PBEST_POSITION, PBEST_RANDOM } PbestInit;
+typedef enum { GBEST_ASYNC, GBEST_SYNC } GbestUpdate;
 
 typedef struct {
-  int       swarm_size;
-  int       iterations;
-  double    w;
-  double    c1;
-  double    c2;
-  PbestInit pbest_init;
+  int         swarm_size;
+  int         iterations;
+  double      w;
+  double      w_end;  // inertia at the last iteration; NaN until validate resolves it to w
+  double      v_max;  // velocity cap as a fraction of the domain width; 0 disables it
+  double      c1;
+  double      c2;
+  PbestInit   pbest_init;
+  GbestUpdate gbest_update;
+  BoundsMode  bounds;
 } PsoConfig;
 
 static _Thread_local PsoConfig cfg;
@@ -29,14 +35,29 @@ static const EnumEntry pbest_init_table[] = {
     {NULL,       0             },
 };
 
+static const EnumEntry gbest_update_table[] = {
+    {"async", GBEST_ASYNC},
+    {"sync",  GBEST_SYNC },
+    {NULL,    0          },
+};
+
 const FieldSpec pso_fields[] = {
     {"swarm_size", FIELD_INT, offsetof(PsoConfig, swarm_size), NULL, "30", "Swarm size"},
     {"iterations", FIELD_INT, offsetof(PsoConfig, iterations), NULL, "100", "Number of iterations"},
-    {"w", FIELD_DOUBLE, offsetof(PsoConfig, w), NULL, "1.0", "Inertia weight"},
+    {"w", FIELD_DOUBLE, offsetof(PsoConfig, w), NULL, "1.0",
+     "Inertia weight (at the first iteration)"},
+    {"w_end", FIELD_DOUBLE, offsetof(PsoConfig, w_end), NULL, "nan",
+     "Inertia at the last iteration, linear decay from w (unset = w)"},
+    {"v_max", FIELD_DOUBLE, offsetof(PsoConfig, v_max), NULL, "0.0",
+     "Velocity cap, fraction of domain width (0 = off)"},
     {"c1", FIELD_DOUBLE, offsetof(PsoConfig, c1), NULL, "2.0", "Cognitive coefficient"},
     {"c2", FIELD_DOUBLE, offsetof(PsoConfig, c2), NULL, "2.0", "Social coefficient"},
     {"pbest_init", FIELD_ENUM, offsetof(PsoConfig, pbest_init), pbest_init_table, "position",
      "pbest init: position | random"},
+    {"gbest_update", FIELD_ENUM, offsetof(PsoConfig, gbest_update), gbest_update_table, "async",
+     "gbest update: async | sync"},
+    {"bounds", FIELD_ENUM, offsetof(PsoConfig, bounds), bounds_table, "clamp",
+     "Out-of-domain handling: clamp | reflect | random"},
     {NULL, 0, 0, NULL, NULL, NULL},
 };
 
@@ -48,6 +69,10 @@ void pso_validate(void) {
   if (cfg.swarm_size <= 0) die("pso: swarm_size must be positive");
   if (cfg.iterations <= 0) die("pso: iterations must be positive");
   if (cfg.w < 0.0) die("pso: w must be non-negative");
+  // Not a check: an unset w_end means constant inertia, resolved here so dump and run see it
+  if (isnan(cfg.w_end)) cfg.w_end = cfg.w;
+  if (cfg.w_end < 0.0) die("pso: w_end must be non-negative");
+  if (cfg.v_max < 0.0) die("pso: v_max must be non-negative (0 disables the cap)");
   if (cfg.c1 < 0.0) die("pso: c1 must be non-negative");
   if (cfg.c2 < 0.0) die("pso: c2 must be non-negative");
 }
@@ -55,12 +80,16 @@ void pso_validate(void) {
 // --- Dump ---
 
 void pso_dump(void) {
-  printf("swarm_size = %d\n", cfg.swarm_size);
-  printf("iterations = %d\n", cfg.iterations);
-  printf("w          = %g\n", cfg.w);
-  printf("c1         = %g\n", cfg.c1);
-  printf("c2         = %g\n", cfg.c2);
-  printf("pbest_init = %s\n", cfg.pbest_init == PBEST_POSITION ? "position" : "random");
+  printf("swarm_size   = %d\n", cfg.swarm_size);
+  printf("iterations   = %d\n", cfg.iterations);
+  printf("w            = %g\n", cfg.w);
+  printf("w_end        = %g\n", cfg.w_end);
+  printf("v_max        = %g\n", cfg.v_max);
+  printf("c1           = %g\n", cfg.c1);
+  printf("c2           = %g\n", cfg.c2);
+  printf("pbest_init   = %s\n", enum_name(pbest_init_table, cfg.pbest_init));
+  printf("gbest_update = %s\n", enum_name(gbest_update_table, cfg.gbest_update));
+  printf("bounds       = %s\n", enum_name(bounds_table, cfg.bounds));
 }
 
 // --- Particle layout ---
@@ -121,7 +150,24 @@ static void init_swarm(Particle* swarm, double* data, double* gbest_pos, double*
   }
 }
 
-static void update_swarm(Particle* swarm, double* gbest_pos, double* gbest_fitness) {
+// Inertia for iteration `iter` (0-based): linear from w at the first iteration to w_end at the
+// last
+// With w_end == w the difference is exactly 0, so constant inertia stays bit-identical to w
+static double inertia(int iter) {
+  double frac = cfg.iterations > 1 ? (double) iter / (cfg.iterations - 1) : 0.0;
+  return cfg.w + (cfg.w_end - cfg.w) * frac;
+}
+
+static void update_gbest(const Particle* p, double* gbest_pos, double* gbest_fitness) {
+  if (is_better(p->pbest_fitness, *gbest_fitness)) {
+    *gbest_fitness = p->pbest_fitness;
+    copy_pos(gbest_pos, p->pbest);
+  }
+}
+
+static void update_swarm(Particle* swarm, double* gbest_pos, double* gbest_fitness, double w) {
+  double v_cap = cfg.v_max * (g_cfg.domain_max - g_cfg.domain_min);  // 0 when disabled
+
   for (int i = 0; i < cfg.swarm_size; i++) {
     swarm[i].pbest_updated = 0;
 
@@ -129,19 +175,16 @@ static void update_swarm(Particle* swarm, double* gbest_pos, double* gbest_fitne
       double r1 = rng_next_double();
       double r2 = rng_next_double();
 
-      swarm[i].vel[d] = cfg.w * swarm[i].vel[d] +
-                        cfg.c1 * r1 * (swarm[i].pbest[d] - swarm[i].pos[d]) +
+      swarm[i].vel[d] = w * swarm[i].vel[d] + cfg.c1 * r1 * (swarm[i].pbest[d] - swarm[i].pos[d]) +
                         cfg.c2 * r2 * (gbest_pos[d] - swarm[i].pos[d]);
 
-      swarm[i].pos[d] += swarm[i].vel[d];
-
-      if (swarm[i].pos[d] < g_cfg.domain_min) {
-        swarm[i].pos[d] = g_cfg.domain_min;
-        swarm[i].vel[d] = 0.0;
-      } else if (swarm[i].pos[d] > g_cfg.domain_max) {
-        swarm[i].pos[d] = g_cfg.domain_max;
-        swarm[i].vel[d] = 0.0;
+      if (v_cap > 0.0) {
+        if (swarm[i].vel[d] > v_cap) swarm[i].vel[d] = v_cap;
+        else if (swarm[i].vel[d] < -v_cap) swarm[i].vel[d] = -v_cap;
       }
+
+      swarm[i].pos[d] += swarm[i].vel[d];
+      apply_bounds(&swarm[i].pos[d], &swarm[i].vel[d], cfg.bounds);
     }
 
     swarm[i].fitness = g_cfg.fitness_fn(swarm[i].pos);
@@ -152,13 +195,14 @@ static void update_swarm(Particle* swarm, double* gbest_pos, double* gbest_fitne
       swarm[i].pbest_updated = 1;
     }
 
-    // Async gbest update: gbest moves as soon as any particle improves it,
-    // within the same iteration - later particles see the updated gbest.
-    if (is_better(swarm[i].pbest_fitness, *gbest_fitness)) {
-      *gbest_fitness = swarm[i].pbest_fitness;
-      copy_pos(gbest_pos, swarm[i].pbest);
-    }
+    // Async: gbest moves as soon as any particle improves it, so later particles in the same
+    // iteration already steer toward the new best
+    if (cfg.gbest_update == GBEST_ASYNC) update_gbest(&swarm[i], gbest_pos, gbest_fitness);
   }
+
+  // Sync: every particle moved against the gbest from the start of the iteration; refresh it once
+  if (cfg.gbest_update == GBEST_SYNC)
+    for (int i = 0; i < cfg.swarm_size; i++) update_gbest(&swarm[i], gbest_pos, gbest_fitness);
 }
 
 // --- Presentation ---
@@ -212,10 +256,12 @@ void pso_run(void) {
   }
 
   for (int i = 0; i < cfg.iterations; i++) {
-    update_swarm(swarm, gbest_pos, &gbest_fitness);
+    double w = inertia(i);
+    update_swarm(swarm, gbest_pos, &gbest_fitness, w);
 
     if (g_cfg.interactive) {
       print_iteration_header(i);
+      if (cfg.w_end != cfg.w) printf("w = %g\n\n", w);
       print_swarm(swarm, gbest_fitness);
       wait_for_enter();
       print_separator();

@@ -16,6 +16,7 @@ SRC    = $(SRCDIR)/main.c \
          $(SRCDIR)/utils.c \
          $(SRCDIR)/rng.c \
          $(SRCDIR)/fitness.c \
+         $(SRCDIR)/bounds.c \
          $(SRCDIR)/config.c \
          $(SRCDIR)/toml.c \
          $(SRCDIR)/args.c \

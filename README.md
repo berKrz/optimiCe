@@ -17,8 +17,10 @@ optimiCe runs an optimization algorithm against a user-defined fitness function 
 ## PSO
 
 - Classical velocity update: `v ← w·v + c₁·r₁·(pbest − x) + c₂·r₂·(gbest − x)`
-- Asynchronous gbest update: gbest moves within the iteration as soon as any particle improves it
-- Boundary clamping with velocity reset: particles pushed outside the domain are pinned to the bound and their velocity on that dimension zeroed
+- Optional linear inertia decay: `w` applies at the first iteration and `w_end` at the last, interpolated in between (Shi & Eberhart's `0.9 → 0.4` is the classic setting). Leaving `w_end` unset keeps the inertia constant
+- Optional velocity clamping (`v_max`): each velocity component is capped at `v_max × (domain_max − domain_min)`
+- Asynchronous or synchronous gbest update (`gbest_update`): `async` moves gbest within the iteration as soon as any particle improves it, `sync` refreshes it once after the whole swarm has moved
+- Configurable boundary handling (`bounds`): `clamp` pins a particle to the bound and zeroes its velocity on that dimension (the default), `reflect` mirrors it back inside and reverses that velocity component, `random` redraws that coordinate uniformly and zeroes its velocity
 - Configurable inertia (`w`), cognitive coefficient (`c1`), and social coefficient (`c2`)
 - `pbest` initialization by particle position, or by independent random draw
 
@@ -43,8 +45,7 @@ optimiCe runs an optimization algorithm against a user-defined fitness function 
 - Three-branch position update per slime: with probability `z`, full uniform re-init; otherwise, per-dimension, probability `tanh|fᵢ − DF|` of exploiting around the best-ever using two random peers and amplitude `a = atanh(1 − t/T)`; else contract with amplitude `b = 1 − t/T`
 - Decay: both `a` and `b` shrink to zero as `t → T`, trading exploration for exploitation across the run
 - Opportunistic best-ever update within the iteration (mirrors PSO's async gbest — later slimes see the fresh best)
-- Boundary clamping: positions driven outside the domain are pinned to the bound
-
+- Configurable boundary handling (`bounds`): `clamp` pins a coordinate to the bound (the default), `reflect` mirrors it back inside, `random` redraws it uniformly
 
 ## Build
 
@@ -138,10 +139,14 @@ pbest_init = "position"
 |--------------|-------|------------|---------------------------------------------------------------------------------------|
 | `swarm_size` | int   | `30`       | Number of particles                                                                   |
 | `iterations` | int   | `100`      | Number of iterations                                                                  |
-| `w`          | float | `1.0`      | Inertia weight                                                                        |
+| `w`          | float | `1.0`      | Inertia weight (at the first iteration, when `w_end` is set)                          |
+| `w_end`      | float | `= w`      | Inertia at the last iteration; linear decay from `w`. Unset means constant inertia    |
+| `v_max`      | float | `0.0`      | Velocity cap as a fraction of the domain width; `0` disables it                       |
 | `c1`         | float | `2.0`      | Cognitive coefficient                                                                 |
 | `c2`         | float | `2.0`      | Social coefficient                                                                    |
 | `pbest_init` | enum  | `position` | `position` (pbest starts at the initial position) or `random` (independent random point) |
+| `gbest_update` | enum | `async`  | `async` (gbest moves as soon as a particle improves it) or `sync` (once per iteration) |
+| `bounds`     | enum  | `clamp`    | Out-of-domain handling: `clamp`, `reflect` or `random`. Reflection bounces as many times as needed for coordinates that overshoot by more than the domain width |
 
 ### GA fields
 
@@ -165,7 +170,7 @@ pbest_init = "position"
 | `pop_size`   | int   | `30`    | Population size                                     |
 | `iterations` | int   | `100`   | Number of iterations                                |
 | `z`          | float | `0.03`  | Full re-init probability per slime, in `[0.0, 1.0]` |
-
+| `bounds`     | enum  | `clamp` | Out-of-domain handling: `clamp`, `reflect` or `random` |
 
 ## Dev environment
 

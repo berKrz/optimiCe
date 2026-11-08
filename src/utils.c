@@ -4,6 +4,12 @@
 #include "algorithms.h"
 #include "common.h"
 
+const char* enum_name(const EnumEntry* table, int value) {
+  for (int i = 0; table[i].name; i++)
+    if (table[i].value == value) return table[i].name;
+  return "?";
+}
+
 void die(const char* msg) {
   fprintf(stderr, "Error: %s\n", msg);
   fprintf(stderr, "Run with --help to see available options.\n");
