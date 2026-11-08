@@ -2,7 +2,7 @@
 
 A runner for metaheuristic optimization algorithms, written in C.
 
-optimiCe runs an optimization algorithm against a user-defined fitness function and reports the best solution it finds. The algorithm, fitness function, and all parameters are specified in a TOML configuration file.
+optimiCe runs an optimization algorithm against a chosen benchmark fitness function and reports the best solution it finds. The algorithm, fitness function, and all parameters are specified in a TOML configuration file.
 
 ## Common
 
@@ -81,19 +81,19 @@ If you install it under a non-default prefix, point `pkg-config` at it when buil
 ./optimice -f example.toml
 ```
 
-| Flag        | Long form           | Description                                              |
-|-------------|---------------------|----------------------------------------------------------|
-| `-f FILE`   | `--config FILE`     | Path to TOML configuration file (required)                |
-| `-i`        | `--interactive`     | Pause after each iteration for inspection                |
-| `-l`        | `--list`            | List available algorithms                                |
-| `-d`        | `--dump-config`     | Print the resolved configuration and exit                |
-| `-h [ALG]`  | `--help [ALG]`      | General help, or algorithm-specific help if `ALG` is given |
+| Flag       | Long form       | Description                                                |
+|------------|-----------------|------------------------------------------------------------|
+| `-f FILE`  | `--config FILE` | Path to TOML configuration file (required)                 |
+| `-i`       | `--interactive` | Pause after each iteration for inspection                  |
+| `-l`       | `--list`        | List available algorithms                                  |
+| `-d`       | `--dump-config` | Print the resolved configuration and exit                  |
+| `-h [ALG]` | `--help [ALG]`  | General help, or algorithm-specific help if `ALG` is given |
 
 ## Configuration
 
-All parameters are set in a TOML file passed via `-f`, split into a `[common]` section for algorithm-agnostic fields and a `[[run]]` section carrying the algorithm selection and its algorithm-specific fields.
+All parameters are set in a TOML file passed via `-f`, split into a `[common]` section for algorithm-agnostic fields and a `[[run]]` section carrying the algorithm selection and its algorithm-specific fields. See [`example.toml`](example.toml) for a fuller example covering every algorithm.
 
-```ini
+```toml
 # optimice example config - minimal PSO run
 [common]
 n_dims     = 2
@@ -116,63 +116,70 @@ pbest_init = "position"
 
 ### Syntax
 
-- Lines starting with `#` are comments. Blank lines are ignored.
-- Keys are written exactly as listed in the tables below, with underscores (`swarm_size`, not `swarm-size`).
+- `#` starts a comment, either on its own line or after a value. Blank lines are ignored.
+- Only two top-level sections are allowed: `[common]` (optional) and `[[run]]` (required). This version runs exactly one `[[run]]`.
+- `algorithm` is required and goes in `[[run]]`. It selects the algorithm and loads its defaults before anything else is applied, so its position inside the section doesn't matter.
+- `seed` goes in `[common]` only.
+- The other runner fields can go in `[common]`, in `[[run]]`, or both. A value in `[[run]]` overrides the one in `[common]`.
+- Algorithm fields go in `[[run]]`.
+- Keys are written exactly as listed in the tables below, with underscores.
 - Each key may appear only once per section. TOML rejects duplicates at parse time.
 - Values are typed: `int` fields take integers (`30`, not `30.0`), `float` fields take floats or integers (`5` is read as `5.0`), and `enum` / `name` fields take quoted strings (`"sphere"`).
 - Unknown keys, wrongly typed values, and keys in the wrong section are hard errors at startup. Messages name the file, section, and key, e.g. `Error at 'example.toml [[run]]' [swarm-size]: unknown key for algorithm 'pso'`.
 - Range and cross-field checks run after the whole file is read: `domain_min < domain_max`, each fitness function's `n_dims` and domain requirements, and each algorithm's own constraints.
 
-### Common fields
+### Runner fields
 
-| Key          | Type   | Default    | Description                                                                                     |
-|--------------|--------|------------|-------------------------------------------------------------------------------------------------|
-| `algorithm`  | enum   | required   | `pso`, `ga` or `sma`                                                                                   |
-| `seed`       | uint   | auto       | RNG seed (32-bit). When omitted, one is generated and reported in the final result               |
-| `direction`  | enum   | `minimize` | `minimize` or `maximize`                                                                        |
-| `n_dims`     | int    | `2`        | Number of dimensions                                                                            |
-| `iterations` | int    | `100`      | Iteration budget, the hard cap on every run (generations, for GA)                               |
-| `target_fitness` | float | unset   | Stop early once the current best is at least as good as this value                              |
-| `stagnation` | int    | `0`        | Stop early after this many consecutive iterations without improving the best-ever; `0` disables it |
-| `domain_min` | float  | `-5.0`     | Lower bound of each dimension                                                                   |
-| `domain_max` | float  | `5.0`      | Upper bound of each dimension                                                                   |
-| `fitness`    | name   | `sphere`   | One of the eight benchmark functions listed above. Some have fixed `n_dims` or stricter domain bounds, enforced at startup |
+Fields that belong to the runner rather than to any algorithm.
+
+| Key              | Type   | Default    | Description                                                                                                  |
+|------------------|--------|------------|--------------------------------------------------------------------------------------------------------------|
+| `seed`           | uint32 | generated  | RNG seed. When omitted, one is generated and reported in the final result. `[common]` only                   |
+| `direction`      | enum   | `minimize` | `minimize` or `maximize`                                                                                     |
+| `n_dims`         | int    | `2`        | Number of dimensions                                                                                         |
+| `iterations`     | int    | `100`      | Iteration budget, the hard cap on every run (generations, for GA)                                            |
+| `target_fitness` | float  | unset      | Stop early once the current best is at least as good as this value                                           |
+| `stagnation`     | int    | `0`        | Stop early after this many consecutive iterations without improving the best-ever; `0` disables it           |
+| `domain_min`     | float  | `-5.0`     | Lower bound of each dimension                                                                                |
+| `domain_max`     | float  | `5.0`      | Upper bound of each dimension                                                                                |
+| `fitness`        | name   | `sphere`   | One of the eight benchmark functions listed above. Some have fixed `n_dims` or stricter domain bounds, enforced at startup |
+| `algorithm`      | name   | required   | `pso`, `ga` or `sma`. `[[run]]` only                                                                         |
 
 ### PSO fields
 
-| Key          | Type  | Default    | Description                                                                           |
-|--------------|-------|------------|---------------------------------------------------------------------------------------|
-| `swarm_size` | int   | `30`       | Number of particles                                                                   |
-| `w`          | float | `1.0`      | Inertia weight (at the first iteration, when `w_end` is set)                          |
-| `w_end`      | float | `= w`      | Inertia at the last iteration; linear decay from `w`. Unset means constant inertia    |
-| `v_max`      | float | `0.0`      | Velocity cap as a fraction of the domain width; `0` disables it                       |
-| `c1`         | float | `2.0`      | Cognitive coefficient                                                                 |
-| `c2`         | float | `2.0`      | Social coefficient                                                                    |
-| `pbest_init` | enum  | `position` | `position` (pbest starts at the initial position) or `random` (independent random point) |
-| `gbest_update` | enum | `async`  | `async` (gbest moves as soon as a particle improves it) or `sync` (once per iteration) |
-| `bounds`     | enum  | `clamp`    | Out-of-domain handling: `clamp`, `reflect` or `random`. Reflection bounces as many times as needed for coordinates that overshoot by more than the domain width |
+| Key            | Type  | Default         | Description                                                                              |
+|----------------|-------|-----------------|------------------------------------------------------------------------------------------|
+| `swarm_size`   | int   | `30`            | Number of particles                                                                      |
+| `w`            | float | `1.0`           | Inertia weight (at the first iteration, when `w_end` is set)                             |
+| `w_end`        | float | unset (= `w`)   | Inertia at the last iteration; linear decay from `w`. Unset means constant inertia       |
+| `v_max`        | float | `0.0`           | Velocity cap as a fraction of the domain width; `0` disables it                          |
+| `c1`           | float | `2.0`           | Cognitive coefficient                                                                    |
+| `c2`           | float | `2.0`           | Social coefficient                                                                       |
+| `pbest_init`   | enum  | `position`      | `position` (pbest starts at the initial position) or `random` (independent random point) |
+| `gbest_update` | enum  | `async`         | `async` (gbest moves as soon as a particle improves it) or `sync` (once per iteration)   |
+| `bounds`       | enum  | `clamp`         | Out-of-domain handling: `clamp`, `reflect` or `random`. Reflection bounces as many times as needed for coordinates that overshoot by more than the domain width |
 
 ### GA fields
 
-| Key               | Type  | Default        | Description                                                                                 |
-|-------------------|-------|----------------|---------------------------------------------------------------------------------------------|
-| `pop_size`        | int   | `15`           | Population size (minimum 2)                                                                 |
-| `ind_size`        | int   | `22`           | Bits per dimension, in `[2, 63]`. Total bits per individual is `n_dims × ind_size`          |
-| `tournament_size` | int   | `2`            | Individuals per tournament; must be at most `pop_size`. Only used when `selection=tournament` |
-| `rank_pressure`   | float | `1.5`          | Expected copies of the best individual under rank selection, in `[1.0, 2.0]`: `1.0` is uniform, `2.0` never picks the worst. Only used when `selection=rank` |
-| `cut_points`      | float array | `[0.6]`  | Cut ratios for `n_point`, each in `(0.0, 1.0)` and strictly increasing; each cut index is `floor(ind_size × ratio)` per dimension, and indices must be distinct and at least 1. Only used when `crossover=n_point` |
-| `mutation_rate`   | float | `0.01`         | Per-bit flip probability in `[0.0, 1.0)`                                                    |
-| `selection`       | name  | `roulette`     | `roulette`, `roulette_normalized`, `rank` or `tournament`                                   |
-| `crossover`       | name  | `n_point`      | `n_point` or `uniform`                                                                       |
-| `elitism`         | name  | `none`         | `none` or `family`                                                                           |
+| Key               | Type    | Default    | Description                                                                                 |
+|-------------------|---------|------------|---------------------------------------------------------------------------------------------|
+| `pop_size`        | int     | `15`       | Population size (minimum 2)                                                                 |
+| `ind_size`        | int     | `22`       | Bits per dimension, in `[2, 63]`. Total bits per individual is `n_dims × ind_size`          |
+| `tournament_size` | int     | `2`        | Individuals per tournament; must be at most `pop_size`. Only used when `selection=tournament` |
+| `rank_pressure`   | float   | `1.5`      | Expected copies of the best individual under rank selection, in `[1.0, 2.0]`: `1.0` is uniform, `2.0` never picks the worst. Only used when `selection=rank` |
+| `cut_points`      | float[] | `[0.6]`    | Cut ratios for `n_point`, each in `(0.0, 1.0)` and strictly increasing; each cut index is `floor(ind_size × ratio)` per dimension, and indices must be distinct and at least 1. Only used when `crossover=n_point` |
+| `mutation_rate`   | float   | `0.01`     | Per-bit flip probability in `[0.0, 1.0)`                                                    |
+| `selection`       | enum    | `roulette` | `roulette`, `roulette_normalized`, `rank` or `tournament`                                   |
+| `crossover`       | enum    | `n_point`  | `n_point` or `uniform`                                                                      |
+| `elitism`         | enum    | `none`     | `none` or `family`                                                                          |
 
 ### SMA fields
 
-| Key          | Type  | Default | Description                                         |
-|--------------|-------|---------|-----------------------------------------------------|
-| `pop_size`   | int   | `30`    | Population size                                     |
-| `z`          | float | `0.03`  | Full re-init probability per slime, in `[0.0, 1.0]` |
-| `bounds`     | enum  | `clamp` | Out-of-domain handling: `clamp`, `reflect` or `random` |
+| Key        | Type  | Default | Description                                            |
+|------------|-------|---------|--------------------------------------------------------|
+| `pop_size` | int   | `30`    | Population size                                        |
+| `z`        | float | `0.03`  | Full re-init probability per slime, in `[0.0, 1.0]`    |
+| `bounds`   | enum  | `clamp` | Out-of-domain handling: `clamp`, `reflect` or `random` |
 
 ## Dev environment
 
