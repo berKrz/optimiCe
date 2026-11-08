@@ -9,6 +9,7 @@ optimiCe runs an optimization algorithm against a user-defined fitness function 
 - Eight standard benchmark fitness functions: `sphere`, `rosenbrock`, `rastrigin`, `griewank`, `ackley`, `eggholder`, `schwefel`, `schaffer_f6`
 - N-dimensional continuous search space
 - Minimization or maximization
+- Iteration budget shared by every algorithm (`iterations`; generations, for GA), with two optional early stoppers: `target_fitness` ends the run once the current best is at least as good as the target, and `stagnation` ends it after that many consecutive iterations without improving the best-ever. The final result says when and why a run stopped early
 - Reproducible runs: `seed` can be set in the configuration; when omitted, one is generated and printed in the final result so any run can be rerun exactly
 - Configuration errors caught at startup, with messages pointing at the offending section and key
 - Interactive step-through mode (`-i`) for inspection
@@ -100,13 +101,13 @@ fitness    = "sphere"
 direction  = "minimize"
 domain_min = -5.0
 domain_max =  5.0
+iterations = 100
 seed       = 42
 
-# PSO-specific
+# The run: algorithm selection + its fields
 [[run]]
 algorithm  = "pso"
 swarm_size = 30
-iterations = 100
 w          = 1.0
 c1         = 2.0
 c2         = 2.0
@@ -129,6 +130,9 @@ pbest_init = "position"
 | `seed`       | uint   | auto       | RNG seed (32-bit). When omitted, one is generated and reported in the final result               |
 | `direction`  | enum   | `minimize` | `minimize` or `maximize`                                                                        |
 | `n_dims`     | int    | `2`        | Number of dimensions                                                                            |
+| `iterations` | int    | `100`      | Iteration budget, the hard cap on every run (generations, for GA)                               |
+| `target_fitness` | float | unset   | Stop early once the current best is at least as good as this value                              |
+| `stagnation` | int    | `0`        | Stop early after this many consecutive iterations without improving the best-ever; `0` disables it |
 | `domain_min` | float  | `-5.0`     | Lower bound of each dimension                                                                   |
 | `domain_max` | float  | `5.0`      | Upper bound of each dimension                                                                   |
 | `fitness`    | name   | `sphere`   | One of the eight benchmark functions listed above. Some have fixed `n_dims` or stricter domain bounds, enforced at startup |
@@ -138,7 +142,6 @@ pbest_init = "position"
 | Key          | Type  | Default    | Description                                                                           |
 |--------------|-------|------------|---------------------------------------------------------------------------------------|
 | `swarm_size` | int   | `30`       | Number of particles                                                                   |
-| `iterations` | int   | `100`      | Number of iterations                                                                  |
 | `w`          | float | `1.0`      | Inertia weight (at the first iteration, when `w_end` is set)                          |
 | `w_end`      | float | `= w`      | Inertia at the last iteration; linear decay from `w`. Unset means constant inertia    |
 | `v_max`      | float | `0.0`      | Velocity cap as a fraction of the domain width; `0` disables it                       |
@@ -154,7 +157,6 @@ pbest_init = "position"
 |-------------------|-------|----------------|---------------------------------------------------------------------------------------------|
 | `pop_size`        | int   | `15`           | Population size (minimum 2)                                                                 |
 | `ind_size`        | int   | `22`           | Bits per dimension, in `[2, 63]`. Total bits per individual is `n_dims × ind_size`          |
-| `generations`     | int   | `30`           | Number of generations                                                                       |
 | `tournament_size` | int   | `2`            | Individuals per tournament; must be at most `pop_size`. Only used when `selection=tournament` |
 | `rank_pressure`   | float | `1.5`          | Expected copies of the best individual under rank selection, in `[1.0, 2.0]`: `1.0` is uniform, `2.0` never picks the worst. Only used when `selection=rank` |
 | `cut_points`      | float array | `[0.6]`  | Cut ratios for `n_point`, each in `(0.0, 1.0)` and strictly increasing; each cut index is `floor(ind_size × ratio)` per dimension, and indices must be distinct and at least 1. Only used when `crossover=n_point` |
@@ -168,7 +170,6 @@ pbest_init = "position"
 | Key          | Type  | Default | Description                                         |
 |--------------|-------|---------|-----------------------------------------------------|
 | `pop_size`   | int   | `30`    | Population size                                     |
-| `iterations` | int   | `100`   | Number of iterations                                |
 | `z`          | float | `0.03`  | Full re-init probability per slime, in `[0.0, 1.0]` |
 | `bounds`     | enum  | `clamp` | Out-of-domain handling: `clamp`, `reflect` or `random` |
 

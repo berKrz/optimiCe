@@ -1,3 +1,5 @@
+#include <float.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -52,7 +54,34 @@ void print_iteration_line(int iter, double best_fitness) {
   printf("Iteration %3d   best = %g\n", iter, best_fitness);
 }
 
-void print_result(const double* best_pos, double best_fitness) {
+StopState stop_init(void) {
+  return (StopState) {
+      .best   = g_cfg.direction == MINIMIZE ? DBL_MAX : -DBL_MAX,
+      .stale  = 0,
+      .reason = STOP_NONE,
+  };
+}
+
+int stop_check(StopState* st, int iter, double current_best) {
+  if (is_better(current_best, st->best)) {
+    st->best  = current_best;
+    st->stale = 0;
+  } else {
+    st->stale++;
+  }
+
+  // Target reached: at least as good as target_fitness
+  if (!isnan(g_cfg.target_fitness) && !is_better(g_cfg.target_fitness, current_best))
+    st->reason = STOP_TARGET;
+  else if (g_cfg.stagnation > 0 && st->stale >= g_cfg.stagnation)
+    st->reason = STOP_STAGNATION;
+
+  if (st->reason == STOP_NONE) return 0;
+  st->iteration = iter;
+  return 1;
+}
+
+void print_result(const double* best_pos, double best_fitness, const StopState* st) {
   for (int i = 0; i < LINE_WIDTH; i++) printf("=");
   printf("\n");
 
@@ -67,6 +96,13 @@ void print_result(const double* best_pos, double best_fitness) {
   for (int d = 0; d < g_cfg.n_dims; d++) printf("%7.3f ", best_pos[d]);
   printf("]\n");
   printf("   fitness = %g\n\n", best_fitness);
+
+  if (st->reason == STOP_TARGET)
+    printf("Stopped early at iteration %d: target fitness %g reached\n\n", st->iteration,
+           g_cfg.target_fitness);
+  else if (st->reason == STOP_STAGNATION)
+    printf("Stopped early at iteration %d: no improvement for %d iterations\n\n", st->iteration,
+           g_cfg.stagnation);
 
   printf("Algorithm: %s    Seed: 0x%08x\n", g_cfg.algorithm->name, g_cfg.seed);
   for (int i = 0; i < LINE_WIDTH; i++) printf("=");

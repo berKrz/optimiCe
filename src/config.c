@@ -219,6 +219,12 @@ const FieldSpec common_fields[] = {
     {"direction", FIELD_ENUM, offsetof(Config, direction), direction_table, "minimize",
      "Direction: minimize | maximize"},
     {"n_dims", FIELD_INT, offsetof(Config, n_dims), NULL, "2", "Number of dimensions"},
+    {"iterations", FIELD_INT, offsetof(Config, iterations), NULL, "100",
+     "Iteration budget (generations, for GA)"},
+    {"target_fitness", FIELD_DOUBLE, offsetof(Config, target_fitness), NULL, "nan",
+     "Stop early once the best reaches this value"},
+    {"stagnation", FIELD_INT, offsetof(Config, stagnation), NULL, "0",
+     "Stop early after N iterations without improvement (0 = off)"},
     {"domain_min", FIELD_DOUBLE, offsetof(Config, domain_min), NULL, "-5.0",
      "Lower bound of the domain"},
     {"domain_max", FIELD_DOUBLE, offsetof(Config, domain_max), NULL, "5.0",
@@ -264,6 +270,8 @@ void print_help_from_table(const FieldSpec* table) {
 void validate(void) {
   if (!g_cfg.algorithm) die("algorithm not set in config file");
   if (g_cfg.domain_min >= g_cfg.domain_max) die("domain_min must be strictly less than domain_max");
+  if (g_cfg.iterations < 1) die("iterations must be positive");
+  if (g_cfg.stagnation < 0) die("stagnation must be non-negative (0 disables it)");
 
   const FitnessEntry* fe = get_fitness_entry(g_cfg.fitness_fn);
   if (!fe) die("fitness function not found in catalog");
@@ -294,14 +302,17 @@ void dump_config(void) {
   const FitnessEntry* fe = get_fitness_entry(g_cfg.fitness_fn);
 
   printf("# resolved config\n");
-  printf("algorithm   = %s\n", g_cfg.algorithm ? g_cfg.algorithm->name : "(unset)");
-  printf("seed        = 0x%08x\n", g_cfg.seed);
-  printf("direction   = %s\n", enum_name(direction_table, g_cfg.direction));
-  printf("n_dims      = %d\n", g_cfg.n_dims);
-  printf("domain_min  = %g\n", g_cfg.domain_min);
-  printf("domain_max  = %g\n", g_cfg.domain_max);
-  printf("interactive = %s\n", g_cfg.interactive ? "true" : "false");
-  printf("fitness     = %s\n", fe ? fe->name : "(unknown)");
+  printf("algorithm      = %s\n", g_cfg.algorithm ? g_cfg.algorithm->name : "(unset)");
+  printf("seed           = 0x%08x\n", g_cfg.seed);
+  printf("direction      = %s\n", enum_name(direction_table, g_cfg.direction));
+  printf("n_dims         = %d\n", g_cfg.n_dims);
+  printf("iterations     = %d\n", g_cfg.iterations);
+  printf("target_fitness = %g\n", g_cfg.target_fitness);
+  printf("stagnation     = %d\n", g_cfg.stagnation);
+  printf("domain_min     = %g\n", g_cfg.domain_min);
+  printf("domain_max     = %g\n", g_cfg.domain_max);
+  printf("interactive    = %s\n", g_cfg.interactive ? "true" : "false");
+  printf("fitness        = %s\n", fe ? fe->name : "(unknown)");
 
   if (!g_cfg.algorithm) return;
   printf("\n# %s arm\n", g_cfg.algorithm->name);

@@ -17,6 +17,9 @@ typedef struct {
   int          n_dims;
   double       domain_min;
   double       domain_max;
+  int          iterations;      // hard cap on every run
+  double       target_fitness;  // early stop once the current best reaches it; NaN = off
+  int          stagnation;      // early stop after this many iterations without improving; 0 = off
   int          interactive;
 
   double (*fitness_fn)(const double* pos);
@@ -37,7 +40,24 @@ void wait_for_enter(void);
 void print_separator(void);
 void print_iteration_header(int iter);
 void print_iteration_line(int iter, double best_fitness);
-void print_result(const double* best_pos, double best_fitness);
+// Early stopping: algorithms call stop_check once per iteration with their current best fitness
+// and leave the loop when it returns 1
+// The state tracks its own best-ever, so stagnation is measured the same way for every algorithm,
+// whether or not its per-iteration best can regress
+typedef enum { STOP_NONE, STOP_TARGET, STOP_STAGNATION } StopReason;
+
+typedef struct {
+  double     best;       // best-ever fitness seen by stop_check
+  int        stale;      // consecutive iterations without improving `best`
+  int        iteration;  // 0-based iteration the run stopped at, valid when reason != STOP_NONE
+  StopReason reason;
+} StopState;
+
+StopState stop_init(void);
+int       stop_check(StopState* st, int iter, double current_best);
+
+// Footer of every run; mentions an early stop when `st` records one
+void print_result(const double* best_pos, double best_fitness, const StopState* st);
 void print_vec(const double* v);
 int  is_better(double a, double b);
 

@@ -14,7 +14,6 @@ typedef enum { GBEST_ASYNC, GBEST_SYNC } GbestUpdate;
 
 typedef struct {
   int         swarm_size;
-  int         iterations;
   double      w;
   double      w_end;  // inertia at the last iteration; NaN until validate resolves it to w
   double      v_max;  // velocity cap as a fraction of the domain width; 0 disables it
@@ -43,7 +42,6 @@ static const EnumEntry gbest_update_table[] = {
 
 const FieldSpec pso_fields[] = {
     {"swarm_size", FIELD_INT, offsetof(PsoConfig, swarm_size), NULL, "30", "Swarm size"},
-    {"iterations", FIELD_INT, offsetof(PsoConfig, iterations), NULL, "100", "Number of iterations"},
     {"w", FIELD_DOUBLE, offsetof(PsoConfig, w), NULL, "1.0",
      "Inertia weight (at the first iteration)"},
     {"w_end", FIELD_DOUBLE, offsetof(PsoConfig, w_end), NULL, "nan",
@@ -67,7 +65,6 @@ void* pso_cfg_base(void) { return &cfg; }
 
 void pso_validate(void) {
   if (cfg.swarm_size <= 0) die("pso: swarm_size must be positive");
-  if (cfg.iterations <= 0) die("pso: iterations must be positive");
   if (cfg.w < 0.0) die("pso: w must be non-negative");
   // Not a check: an unset w_end means constant inertia, resolved here so dump and run see it
   if (isnan(cfg.w_end)) cfg.w_end = cfg.w;
@@ -81,7 +78,6 @@ void pso_validate(void) {
 
 void pso_dump(void) {
   printf("swarm_size   = %d\n", cfg.swarm_size);
-  printf("iterations   = %d\n", cfg.iterations);
   printf("w            = %g\n", cfg.w);
   printf("w_end        = %g\n", cfg.w_end);
   printf("v_max        = %g\n", cfg.v_max);
@@ -115,19 +111,18 @@ static void copy_pos(double* dst, const double* src) {
 }
 
 static void init_swarm(Particle* swarm, double* data, double* gbest_pos, double* gbest_fitness) {
-  int n            = g_cfg.n_dims;
-  int per_particle = 3 * n;
+  int per_particle = 3 * g_cfg.n_dims;
 
   *gbest_fitness = g_cfg.direction == MINIMIZE ? DBL_MAX : -DBL_MAX;
 
   for (int i = 0; i < cfg.swarm_size; i++) {
     double* slot           = data + i * per_particle;
     swarm[i].pos           = slot;
-    swarm[i].vel           = slot + n;
-    swarm[i].pbest         = slot + 2 * n;
+    swarm[i].vel           = slot + g_cfg.n_dims;
+    swarm[i].pbest         = slot + 2 * g_cfg.n_dims;
     swarm[i].pbest_updated = 0;
 
-    for (int d = 0; d < n; d++) {
+    for (int d = 0; d < g_cfg.n_dims; d++) {
       swarm[i].pos[d] = rng_next_double_range(g_cfg.domain_min, g_cfg.domain_max);
       swarm[i].vel[d] = 0.0;
     }
@@ -138,7 +133,7 @@ static void init_swarm(Particle* swarm, double* data, double* gbest_pos, double*
       copy_pos(swarm[i].pbest, swarm[i].pos);
       swarm[i].pbest_fitness = swarm[i].fitness;
     } else {
-      for (int d = 0; d < n; d++)
+      for (int d = 0; d < g_cfg.n_dims; d++)
         swarm[i].pbest[d] = rng_next_double_range(g_cfg.domain_min, g_cfg.domain_max);
       swarm[i].pbest_fitness = g_cfg.fitness_fn(swarm[i].pbest);
     }
@@ -154,7 +149,7 @@ static void init_swarm(Particle* swarm, double* data, double* gbest_pos, double*
 // last
 // With w_end == w the difference is exactly 0, so constant inertia stays bit-identical to w
 static double inertia(int iter) {
-  double frac = cfg.iterations > 1 ? (double) iter / (cfg.iterations - 1) : 0.0;
+  double frac = g_cfg.iterations > 1 ? (double) iter / (g_cfg.iterations - 1) : 0.0;
   return cfg.w + (cfg.w_end - cfg.w) * frac;
 }
 
@@ -235,13 +230,11 @@ static void print_swarm(const Particle* swarm, double gbest_fitness) {
 // --- Entry point ---
 
 void pso_run(void) {
-  int n            = g_cfg.n_dims;
-  int swarm_size   = cfg.swarm_size;
-  int per_particle = 3 * n;
+  int per_particle = 3 * g_cfg.n_dims;
 
-  double*   data      = malloc(swarm_size * per_particle * sizeof(double));
-  Particle* swarm     = malloc(swarm_size * sizeof(Particle));
-  double*   gbest_pos = malloc(n * sizeof(double));
+  double*   data      = malloc(cfg.swarm_size * per_particle * sizeof(double));
+  Particle* swarm     = malloc(cfg.swarm_size * sizeof(Particle));
+  double*   gbest_pos = malloc(g_cfg.n_dims * sizeof(double));
   double    gbest_fitness;
 
   if (!data || !swarm || !gbest_pos) die("memory allocation failed");
@@ -255,7 +248,8 @@ void pso_run(void) {
     print_separator();
   }
 
-  for (int i = 0; i < cfg.iterations; i++) {
+  StopState stop = stop_init();
+  for (int i = 0; i < g_cfg.iterations; i++) {
     double w = inertia(i);
     update_swarm(swarm, gbest_pos, &gbest_fitness, w);
 
@@ -268,9 +262,10 @@ void pso_run(void) {
     } else {
       print_iteration_line(i, gbest_fitness);
     }
+    if (stop_check(&stop, i, gbest_fitness)) break;
   }
 
-  print_result(gbest_pos, gbest_fitness);
+  print_result(gbest_pos, gbest_fitness, &stop);
 
   free(gbest_pos);
   free(swarm);

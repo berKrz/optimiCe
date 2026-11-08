@@ -16,7 +16,6 @@ typedef enum { ELITISM_NONE, ELITISM_FAMILY } ElitismKind;
 typedef struct {
   int           pop_size;
   int           ind_size;  // bits per dimension (capped at 63 so 1ULL << ind_size is defined)
-  int           generations;
   int           tournament_size;
   double        rank_pressure;  // linear ranking: expected copies of the best, in [1.0, 2.0]
   DoubleList    cut_points;  // n_point cut ratios in (0.0, 1.0), increasing, applied per-dimension
@@ -80,8 +79,6 @@ static const EnumEntry crossover_table[] = {
 const FieldSpec ga_fields[] = {
     {"pop_size", FIELD_INT, offsetof(GaConfig, pop_size), NULL, "15", "Population size (>= 2)"},
     {"ind_size", FIELD_INT, offsetof(GaConfig, ind_size), NULL, "22", "Bits per dimension [2, 63]"},
-    {"generations", FIELD_INT, offsetof(GaConfig, generations), NULL, "30",
-     "Number of generations"},
     {"tournament_size", FIELD_INT, offsetof(GaConfig, tournament_size), NULL, "2",
      "Individuals per tournament"},
     {"rank_pressure", FIELD_DOUBLE, offsetof(GaConfig, rank_pressure), NULL, "1.5",
@@ -144,7 +141,6 @@ static void validate_cut_points(void) {
 void ga_validate(void) {
   if (cfg.pop_size < 2) die("ga: pop_size must be >= 2");
   if (cfg.ind_size < 2 || cfg.ind_size > 63) die("ga: ind_size must be in [2, 63]");
-  if (cfg.generations < 1) die("ga: generations must be positive");
   if (!(cfg.mutation_rate >= 0.0 && cfg.mutation_rate < 1.0))
     die("ga: mutation_rate must be in [0.0, 1.0)");
   // tournament_size is ignored under other selections, so it's only checked when in use
@@ -170,7 +166,6 @@ void ga_validate(void) {
 void ga_dump(void) {
   printf("pop_size        = %d\n", cfg.pop_size);
   printf("ind_size        = %d\n", cfg.ind_size);
-  printf("generations     = %d\n", cfg.generations);
   printf("tournament_size = %d\n", cfg.tournament_size);
   printf("rank_pressure   = %g\n", cfg.rank_pressure);
   printf("cut_points      = [");
@@ -421,40 +416,37 @@ static void snapshot(const uint64_t* pop, GaWork* work) {
 }
 
 static void selection_wheel(uint64_t* pop, GaWork* work) {
-  int n = cfg.pop_size;
   snapshot(pop, work);
 
   switch (cfg.selection) {
     case ROULETTE:
       if (g_cfg.interactive) printf("Selection: Roulette\n\n");
-      weights_roulette(work->fits, work->weights, n);
+      weights_roulette(work->fits, work->weights, cfg.pop_size);
       break;
     case ROULETTE_NORMALIZED:
       if (g_cfg.interactive) printf("Selection: Normalized roulette\n\n");
-      weights_roulette_normalized(work->fits, work->weights, n);
+      weights_roulette_normalized(work->fits, work->weights, cfg.pop_size);
       break;
     case RANK:
       if (g_cfg.interactive) printf("Selection: Rank\n\n");
-      weights_rank(work->fits, work->weights, work->order, n);
+      weights_rank(work->fits, work->weights, work->order, cfg.pop_size);
       break;
     case TOURNAMENT: break;  // not a wheel selection; run_selection never routes it here
   }
 
-  spin(pop, work, n, words_per_ind());
+  spin(pop, work, cfg.pop_size, words_per_ind());
 }
 
 static void selection_tournament(uint64_t* pop, GaWork* work) {
-  int n     = cfg.pop_size;
   int words = words_per_ind();
-  int k     = cfg.tournament_size;
 
   if (g_cfg.interactive) printf("Selection: Tournament\n\n");
   snapshot(pop, work);
 
-  for (int i = 0; i < n; i++) {
-    int winner = rng_next_int(0, n);
-    for (int j = 1; j < k; j++) {
-      int challenger = rng_next_int(0, n);
+  for (int i = 0; i < cfg.pop_size; i++) {
+    int winner = rng_next_int(0, cfg.pop_size);
+    for (int j = 1; j < cfg.tournament_size; j++) {
+      int challenger = rng_next_int(0, cfg.pop_size);
       if (is_better(work->fits[challenger], work->fits[winner])) winner = challenger;
     }
     memcpy(pop + i * words, work->aux + winner * words, words * sizeof(uint64_t));
@@ -622,12 +614,11 @@ static void print_pairs(const uint64_t* pop, double* tmp) {
 // --- Init ---
 
 static void init_pop(uint64_t* pop) {
-  int pop_size   = cfg.pop_size;
   int words      = words_per_ind();
   int total_bits = g_cfg.n_dims * cfg.ind_size;
 
   // calloc in ga_run already zeroed the buffer; just set the 1 bits
-  for (int i = 0; i < pop_size; i++)
+  for (int i = 0; i < cfg.pop_size; i++)
     for (int b = 0; b < total_bits; b++)
       if (rng_next_bit()) bit_set(pop + i * words, b, 1);
 }
@@ -644,10 +635,9 @@ static void run_selection(uint64_t* pop, GaWork* work) {
 }
 
 void ga_run(void) {
-  int pop_size = cfg.pop_size;
   int words    = words_per_ind();
 
-  uint64_t* pop = calloc((size_t) pop_size * (size_t) words, sizeof(uint64_t));
+  uint64_t* pop = calloc((size_t) cfg.pop_size * (size_t) words, sizeof(uint64_t));
   if (!pop) die("memory allocation failed");
   GaWork  work = work_alloc();
   double* tmp  = work.tmp;
@@ -661,7 +651,8 @@ void ga_run(void) {
     print_separator();
   }
 
-  for (int gen = 0; gen < cfg.generations; gen++) {
+  StopState stop = stop_init();
+  for (int gen = 0; gen < g_cfg.iterations; gen++) {
     if (g_cfg.interactive) {
       print_iteration_header(gen);
       run_selection(pop, &work);
@@ -676,15 +667,17 @@ void ga_run(void) {
     } else {
       run_selection(pop, &work);
       iter_pop(pop, &work);
-      double bf = eval(pop + find_best(pop, tmp) * words, tmp);
-      print_iteration_line(gen, bf);
     }
+    // Best of this generation; it's what both the progress line and the early stop look at
+    double gen_best = eval(pop + find_best(pop, tmp) * words, tmp);
+    if (!g_cfg.interactive) print_iteration_line(gen, gen_best);
+    if (stop_check(&stop, gen, gen_best)) break;
   }
 
   // Final result: best of the final generation
   int    bi = find_best(pop, tmp);
   double bf = eval(pop + bi * words, tmp);  // leaves `tmp` holding the best position
-  print_result(tmp, bf);
+  print_result(tmp, bf, &stop);
 
   work_free(&work);
   free(pop);

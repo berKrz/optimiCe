@@ -12,7 +12,6 @@
 
 typedef struct {
   int        pop_size;
-  int        iterations;
   double     z;  // per-slime probability of full random re-init
   BoundsMode bounds;
 } SmaConfig;
@@ -23,7 +22,6 @@ static _Thread_local SmaConfig cfg;
 
 const FieldSpec sma_fields[] = {
     {"pop_size", FIELD_INT, offsetof(SmaConfig, pop_size), NULL, "30", "Population size"},
-    {"iterations", FIELD_INT, offsetof(SmaConfig, iterations), NULL, "100", "Number of iterations"},
     {"z", FIELD_DOUBLE, offsetof(SmaConfig, z), NULL, "0.03",
      "Full re-init probability (per slime)"},
     {"bounds", FIELD_ENUM, offsetof(SmaConfig, bounds), bounds_table, "clamp",
@@ -37,7 +35,6 @@ void* sma_cfg_base(void) { return &cfg; }
 
 void sma_validate(void) {
   if (cfg.pop_size <= 0) die("sma: pop_size must be positive");
-  if (cfg.iterations <= 0) die("sma: iterations must be positive");
   if (cfg.z < 0.0 || cfg.z > 1.0) die("sma: z must be in [0.0, 1.0]");
 }
 
@@ -45,7 +42,6 @@ void sma_validate(void) {
 
 void sma_dump(void) {
   printf("pop_size   = %d\n", cfg.pop_size);
-  printf("iterations = %d\n", cfg.iterations);
   printf("z          = %g\n", cfg.z);
   printf("bounds     = %s\n", enum_name(bounds_table, cfg.bounds));
 }
@@ -86,43 +82,39 @@ static void print_slime(const double* pos, int index, double fit, double DF) {
 }
 
 static void print_pop(const double* positions, const double* fits, double DF) {
-  int n = g_cfg.n_dims;
-  for (int i = 0; i < cfg.pop_size; i++) print_slime(positions + i * n, i, fits[i], DF);
+  for (int i = 0; i < cfg.pop_size; i++) print_slime(positions + i * g_cfg.n_dims, i, fits[i], DF);
   printf("DF = %g\n", DF);
 }
 
 // --- Entry point ---
 
 void sma_run(void) {
-  int n        = g_cfg.n_dims;
-  int pop_size = cfg.pop_size;
-  int T        = cfg.iterations;
 
   // Single slab for the three per-slime arrays, laid out end-to-end:
   // [ positions (pop_size*n) | weights (pop_size*n) | fits (pop_size) ]
-  double* slab  = malloc(pop_size * (2 * n + 1) * sizeof(double));
-  double* Xb    = malloc(n * sizeof(double));
-  FitIdx* order = malloc(pop_size * sizeof(FitIdx));
+  double* slab  = malloc(cfg.pop_size * (2 * g_cfg.n_dims + 1) * sizeof(double));
+  double* Xb    = malloc(g_cfg.n_dims * sizeof(double));
+  FitIdx* order = malloc(cfg.pop_size * sizeof(FitIdx));
 
   if (!slab || !Xb || !order) die("memory allocation failed");
 
   double* positions = slab;
-  double* weights   = slab + pop_size * n;
-  double* fits      = slab + 2 * pop_size * n;
+  double* weights   = slab + cfg.pop_size * g_cfg.n_dims;
+  double* fits      = slab + 2 * cfg.pop_size * g_cfg.n_dims;
 
   // Initial population: uniform random in [domain_min, domain_max]
-  for (int i = 0; i < pop_size; i++) {
-    for (int d = 0; d < n; d++)
-      positions[i * n + d] = rng_next_double_range(g_cfg.domain_min, g_cfg.domain_max);
-    fits[i] = g_cfg.fitness_fn(positions + i * n);
+  for (int i = 0; i < cfg.pop_size; i++) {
+    for (int d = 0; d < g_cfg.n_dims; d++)
+      positions[i * g_cfg.n_dims + d] = rng_next_double_range(g_cfg.domain_min, g_cfg.domain_max);
+    fits[i] = g_cfg.fitness_fn(positions + i * g_cfg.n_dims);
   }
 
   // DF / Xb track best-ever
   double DF = g_cfg.direction == MINIMIZE ? DBL_MAX : -DBL_MAX;
-  for (int i = 0; i < pop_size; i++) {
+  for (int i = 0; i < cfg.pop_size; i++) {
     if (is_better(fits[i], DF)) {
       DF = fits[i];
-      memcpy(Xb, positions + i * n, n * sizeof(double));
+      memcpy(Xb, positions + i * g_cfg.n_dims, g_cfg.n_dims * sizeof(double));
     }
   }
 
@@ -135,16 +127,17 @@ void sma_run(void) {
 
   int (*cmp)(const void*, const void*) = g_cfg.direction == MINIMIZE ? cmp_min : cmp_max;
 
-  for (int it = 0; it < T; it++) {
+  StopState stop = stop_init();
+  for (int it = 0; it < g_cfg.iterations; it++) {
     // --- Rank by fitness ---
-    for (int i = 0; i < pop_size; i++) {
+    for (int i = 0; i < cfg.pop_size; i++) {
       order[i].fit = fits[i];
       order[i].idx = i;
     }
-    qsort(order, pop_size, sizeof(FitIdx), cmp);
+    qsort(order, cfg.pop_size, sizeof(FitIdx), cmp);
 
     double bF = order[0].fit;
-    double wF = order[pop_size - 1].fit;
+    double wF = order[cfg.pop_size - 1].fit;
     // Direction-aware eps to avoid div/0 when all fitnesses are equal, without
     // flipping the denominator's sign (negative for minimize, positive for maximize).
     double S = (bF - wF) + (g_cfg.direction == MINIMIZE ? -DBL_EPSILON : DBL_EPSILON);
@@ -153,55 +146,58 @@ void sma_run(void) {
     // Top half (ranks 0..ceil(pop_size/2) - 1) get 1 + r*log; bottom half gets 1 - r*log.
     // Rounding up matches the reference implementation: the middle slime of an odd
     // population is attracted, not repelled
-    int half = (pop_size + 1) / 2;
-    for (int rank = 0; rank < pop_size; rank++) {
+    int half = (cfg.pop_size + 1) / 2;
+    for (int rank = 0; rank < cfg.pop_size; rank++) {
       int    i      = order[rank].idx;
       double logval = log10((bF - fits[i]) / S + 1.0);
-      for (int d = 0; d < n; d++) {
+      for (int d = 0; d < g_cfg.n_dims; d++) {
         double r           = rng_next_double();
-        weights[i * n + d] = (rank < half) ? 1.0 + r * logval : 1.0 - r * logval;
+        weights[i * g_cfg.n_dims + d] = (rank < half) ? 1.0 + r * logval : 1.0 - r * logval;
       }
     }
 
     // --- Decay coefficients ---
     // Use (it+1)/T, 1-indexed
-    double t_frac = (double) (it + 1) / (double) T;
+    double t_frac = (double) (it + 1) / (double) g_cfg.iterations;
     double a      = atanh(-t_frac + 1.0);  // vb range: [-a, a], shrinks to 0
     double b      = 1.0 - t_frac;          // vc range: [-b, b], shrinks to 0
 
     // --- Position update ---
-    for (int i = 0; i < pop_size; i++) {
+    for (int i = 0; i < cfg.pop_size; i++) {
       if (rng_next_double() < cfg.z) {
         // Whole-slime re-init - one draw per slime
-        for (int d = 0; d < n; d++)
-          positions[i * n + d] = rng_next_double_range(g_cfg.domain_min, g_cfg.domain_max);
+        for (int d = 0; d < g_cfg.n_dims; d++)
+          positions[i * g_cfg.n_dims + d] =
+              rng_next_double_range(g_cfg.domain_min, g_cfg.domain_max);
       } else {
         double p = tanh(fabs(fits[i] - DF));
-        for (int d = 0; d < n; d++) {
+        for (int d = 0; d < g_cfg.n_dims; d++) {
           if (rng_next_double() < p) {
             // Exploit around Xb using two independent peer draws
-            int    A  = rng_next_int(0, pop_size);
-            int    B  = rng_next_int(0, pop_size);
+            int    A  = rng_next_int(0, cfg.pop_size);
+            int    B  = rng_next_int(0, cfg.pop_size);
             double vb = rng_next_double_range(-a, a);
-            positions[i * n + d] =
-                Xb[d] + vb * (weights[i * n + d] * positions[A * n + d] - positions[B * n + d]);
+            positions[i * g_cfg.n_dims + d] =
+                Xb[d] + vb * (weights[i * g_cfg.n_dims + d] * positions[A * g_cfg.n_dims + d] -
+                              positions[B * g_cfg.n_dims + d]);
           } else {
             double vc            = rng_next_double_range(-b, b);
-            positions[i * n + d] = vc * positions[i * n + d];
+            positions[i * g_cfg.n_dims + d] = vc * positions[i * g_cfg.n_dims + d];
           }
         }
       }
 
       // Bring back into the domain (the re-init branch is already inside, so it's a no-op there)
-      for (int d = 0; d < n; d++) apply_bounds(&positions[i * n + d], NULL, cfg.bounds);
+      for (int d = 0; d < g_cfg.n_dims; d++)
+        apply_bounds(&positions[i * g_cfg.n_dims + d], NULL, cfg.bounds);
 
-      fits[i] = g_cfg.fitness_fn(positions + i * n);
+      fits[i] = g_cfg.fitness_fn(positions + i * g_cfg.n_dims);
 
       // Opportunistic DF update within the iteration: later slimes see the fresh Xb
       // Matches PSO's async gbest
       if (is_better(fits[i], DF)) {
         DF = fits[i];
-        memcpy(Xb, positions + i * n, n * sizeof(double));
+        memcpy(Xb, positions + i * g_cfg.n_dims, g_cfg.n_dims * sizeof(double));
       }
     }
 
@@ -213,9 +209,10 @@ void sma_run(void) {
     } else {
       print_iteration_line(it, DF);
     }
+    if (stop_check(&stop, it, DF)) break;
   }
 
-  print_result(Xb, DF);
+  print_result(Xb, DF, &stop);
 
   free(order);
   free(Xb);
