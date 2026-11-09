@@ -66,8 +66,8 @@ void parse_toml(const char* filename) {
   // --- Seed: user-set? (scope keeps it in [common]) ---
 
   int seed_set = (common.type == TOML_TABLE) && (toml_seek(common, "seed").type != TOML_UNKNOWN);
-  if (seed_set) rng_init_with(g_cfg.seed);
-  else rng_init_auto();
+  if (!seed_set) g_cfg.seed = rng_generate_seed();
+  rng_init(g_cfg.seed);
 
   toml_free(result);
 }

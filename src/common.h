@@ -62,12 +62,14 @@ void print_vec(const double* v);
 int  is_better(double a, double b);
 
 // rng.c
-void   rng_init_with(uint32_t seed);
-void   rng_init_auto(void);
-double rng_next_double(void);
-double rng_next_double_range(double lo, double hi);
-int    rng_next_int(int lo, int hi);  // half-open: [lo, hi)
-int    rng_next_bit(void);
+// Per-thread generator: rng_init seeds the calling thread's stream; rng_generate_seed picks a seed
+// (time ^ pid) when the config gives none
+uint32_t rng_generate_seed(void);
+void     rng_init(uint32_t seed);
+double   rng_next_double(void);
+double   rng_next_double_range(double lo, double hi);
+int      rng_next_int(int lo, int hi);  // half-open: [lo, hi)
+int      rng_next_bit(void);
 
 // config.c
 void validate(void);
