@@ -31,7 +31,7 @@ void clear_screen(void) {
 }
 
 void wait_for_enter(void) {
-  if (!g_cfg.interactive) return;
+  if (!g_opts.interactive) return;
   printf("\n  [Press Enter to continue...]\n");
   while (getchar() != '\n');
 }
@@ -73,15 +73,14 @@ int stop_check(StopState* st, int iter, double current_best) {
   // Target reached: at least as good as target_fitness
   if (!isnan(g_cfg.target_fitness) && !is_better(g_cfg.target_fitness, current_best))
     st->reason = STOP_TARGET;
-  else if (g_cfg.stagnation > 0 && st->stale >= g_cfg.stagnation)
-    st->reason = STOP_STAGNATION;
+  else if (g_cfg.stagnation > 0 && st->stale >= g_cfg.stagnation) st->reason = STOP_STAGNATION;
 
   if (st->reason == STOP_NONE) return 0;
   st->iteration = iter;
   return 1;
 }
 
-void print_result(const double* best_pos, double best_fitness, const StopState* st) {
+void print_result(const RunResult* r) {
   for (int i = 0; i < LINE_WIDTH; i++) printf("=");
   printf("\n");
 
@@ -93,15 +92,15 @@ void print_result(const double* best_pos, double best_fitness, const StopState* 
 
   printf("Best solution:\n");
   printf("   pos: [ ");
-  for (int d = 0; d < g_cfg.n_dims; d++) printf("%7.3f ", best_pos[d]);
+  for (int d = 0; d < g_cfg.n_dims; d++) printf("%7.3f ", r->pos[d]);
   printf("]\n");
-  printf("   fitness = %g\n\n", best_fitness);
+  printf("   fitness = %g\n\n", r->fitness);
 
-  if (st->reason == STOP_TARGET)
-    printf("Stopped early at iteration %d: target fitness %g reached\n\n", st->iteration,
+  if (r->stop.reason == STOP_TARGET)
+    printf("Stopped early at iteration %d: target fitness %g reached\n\n", r->stop.iteration,
            g_cfg.target_fitness);
-  else if (st->reason == STOP_STAGNATION)
-    printf("Stopped early at iteration %d: no improvement for %d iterations\n\n", st->iteration,
+  else if (r->stop.reason == STOP_STAGNATION)
+    printf("Stopped early at iteration %d: no improvement for %d iterations\n\n", r->stop.iteration,
            g_cfg.stagnation);
 
   printf("Algorithm: %s    Seed: 0x%08x\n", g_cfg.algorithm->name, g_cfg.seed);

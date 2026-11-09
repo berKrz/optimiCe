@@ -20,7 +20,6 @@ typedef struct {
   int          iterations;      // hard cap on every run
   double       target_fitness;  // early stop once the current best reaches it; NaN = off
   int          stagnation;      // early stop after this many iterations without improving; 0 = off
-  int          interactive;
 
   double (*fitness_fn)(const double* pos);
 
@@ -28,6 +27,14 @@ typedef struct {
 } Config;
 
 extern _Thread_local Config g_cfg;
+
+// Process-wide options from the command line, not part of any config
+// Set once by parse_args before anything runs, read-only afterwards, so shared by every thread
+typedef struct {
+  int interactive;
+} Options;
+
+extern Options g_opts;
 
 #define LINE_WIDTH 50
 
@@ -56,8 +63,16 @@ typedef struct {
 StopState stop_init(void);
 int       stop_check(StopState* st, int iter, double current_best);
 
-// Footer of every run; mentions an early stop when `st` records one
-void print_result(const double* best_pos, double best_fitness, const StopState* st);
+// What a run hands back: its best fitness, where it was found, and how the run ended
+// `pos` is owned by the caller and holds n_dims doubles; the algorithm copies into it
+typedef struct {
+  double    fitness;
+  double*   pos;
+  StopState stop;
+} RunResult;
+
+// Footer of a run; mentions an early stop when the result records one
+void print_result(const RunResult* r);
 void print_vec(const double* v);
 int  is_better(double a, double b);
 

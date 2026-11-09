@@ -40,7 +40,7 @@ static const EnumEntry gbest_update_table[] = {
     {NULL,    0          },
 };
 
-const FieldSpec pso_fields[] = {
+static const FieldSpec pso_fields[] = {
     {"swarm_size", FIELD_INT, SCOPE_ALGO, offsetof(PsoConfig, swarm_size), NULL, "30",
      "Swarm size"},
     {"w", FIELD_DOUBLE, SCOPE_ALGO, offsetof(PsoConfig, w), NULL, "1.0",
@@ -60,11 +60,11 @@ const FieldSpec pso_fields[] = {
     {NULL, 0, 0, 0, NULL, NULL, NULL},
 };
 
-void* pso_cfg_base(void) { return &cfg; }
+static void* pso_cfg_base(void) { return &cfg; }
 
 // --- Validation ---
 
-void pso_validate(void) {
+static void pso_validate(void) {
   if (cfg.swarm_size <= 0) die("pso: swarm_size must be positive");
   if (cfg.w < 0.0) die("pso: w must be non-negative");
   // Not a check: an unset w_end means constant inertia, resolved here so dump and run see it
@@ -77,7 +77,7 @@ void pso_validate(void) {
 
 // --- Dump ---
 
-void pso_dump(void) {
+static void pso_dump(void) {
   printf("swarm_size   = %d\n", cfg.swarm_size);
   printf("w            = %g\n", cfg.w);
   printf("w_end        = %g\n", cfg.w_end);
@@ -230,7 +230,7 @@ static void print_swarm(const Particle* swarm, double gbest_fitness) {
 
 // --- Entry point ---
 
-void pso_run(void) {
+static void pso_run(RunResult* out) {
   int per_particle = 3 * g_cfg.n_dims;
 
   double*   data      = malloc(cfg.swarm_size * per_particle * sizeof(double));
@@ -242,7 +242,7 @@ void pso_run(void) {
 
   init_swarm(swarm, data, gbest_pos, &gbest_fitness);
 
-  if (g_cfg.interactive) {
+  if (g_opts.interactive) {
     printf("Initial Swarm\n\n");
     print_swarm(swarm, gbest_fitness);
     wait_for_enter();
@@ -254,7 +254,7 @@ void pso_run(void) {
     double w = inertia(i);
     update_swarm(swarm, gbest_pos, &gbest_fitness, w);
 
-    if (g_cfg.interactive) {
+    if (g_opts.interactive) {
       print_iteration_header(i);
       if (cfg.w_end != cfg.w) printf("w = %g\n\n", w);
       print_swarm(swarm, gbest_fitness);
@@ -266,9 +266,21 @@ void pso_run(void) {
     if (stop_check(&stop, i, gbest_fitness)) break;
   }
 
-  print_result(gbest_pos, gbest_fitness, &stop);
+  copy_pos(out->pos, gbest_pos);
+  out->fitness = gbest_fitness;
+  out->stop    = stop;
 
   free(gbest_pos);
   free(swarm);
   free(data);
 }
+
+const Algorithm pso_algorithm = {
+    .name     = "pso",
+    .fields   = pso_fields,
+    .cfg_base = pso_cfg_base,
+    .cfg_size = sizeof(PsoConfig),
+    .validate = pso_validate,
+    .dump     = pso_dump,
+    .run      = pso_run,
+};

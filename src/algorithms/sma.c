@@ -20,7 +20,7 @@ static _Thread_local SmaConfig cfg;
 
 // --- Field table ---
 
-const FieldSpec sma_fields[] = {
+static const FieldSpec sma_fields[] = {
     {"pop_size", FIELD_INT, SCOPE_ALGO, offsetof(SmaConfig, pop_size), NULL, "30",
      "Population size"},
     {"z", FIELD_DOUBLE, SCOPE_ALGO, offsetof(SmaConfig, z), NULL, "0.03",
@@ -30,18 +30,18 @@ const FieldSpec sma_fields[] = {
     {NULL, 0, 0, 0, NULL, NULL, NULL},
 };
 
-void* sma_cfg_base(void) { return &cfg; }
+static void* sma_cfg_base(void) { return &cfg; }
 
 // --- Validate ---
 
-void sma_validate(void) {
+static void sma_validate(void) {
   if (cfg.pop_size <= 0) die("sma: pop_size must be positive");
   if (cfg.z < 0.0 || cfg.z > 1.0) die("sma: z must be in [0.0, 1.0]");
 }
 
 // --- Dump ---
 
-void sma_dump(void) {
+static void sma_dump(void) {
   printf("pop_size   = %d\n", cfg.pop_size);
   printf("z          = %g\n", cfg.z);
   printf("bounds     = %s\n", enum_name(bounds_table, cfg.bounds));
@@ -89,8 +89,7 @@ static void print_pop(const double* positions, const double* fits, double DF) {
 
 // --- Entry point ---
 
-void sma_run(void) {
-
+static void sma_run(RunResult* out) {
   // Single slab for the three per-slime arrays, laid out end-to-end:
   // [ positions (pop_size*n) | weights (pop_size*n) | fits (pop_size) ]
   double* slab  = malloc(cfg.pop_size * (2 * g_cfg.n_dims + 1) * sizeof(double));
@@ -119,7 +118,7 @@ void sma_run(void) {
     }
   }
 
-  if (g_cfg.interactive) {
+  if (g_opts.interactive) {
     printf("Initial Population\n\n");
     print_pop(positions, fits, DF);
     wait_for_enter();
@@ -152,7 +151,7 @@ void sma_run(void) {
       int    i      = order[rank].idx;
       double logval = log10((bF - fits[i]) / S + 1.0);
       for (int d = 0; d < g_cfg.n_dims; d++) {
-        double r           = rng_next_double();
+        double r                      = rng_next_double();
         weights[i * g_cfg.n_dims + d] = (rank < half) ? 1.0 + r * logval : 1.0 - r * logval;
       }
     }
@@ -182,7 +181,7 @@ void sma_run(void) {
                 Xb[d] + vb * (weights[i * g_cfg.n_dims + d] * positions[A * g_cfg.n_dims + d] -
                               positions[B * g_cfg.n_dims + d]);
           } else {
-            double vc            = rng_next_double_range(-b, b);
+            double vc                       = rng_next_double_range(-b, b);
             positions[i * g_cfg.n_dims + d] = vc * positions[i * g_cfg.n_dims + d];
           }
         }
@@ -202,7 +201,7 @@ void sma_run(void) {
       }
     }
 
-    if (g_cfg.interactive) {
+    if (g_opts.interactive) {
       print_iteration_header(it);
       print_pop(positions, fits, DF);
       wait_for_enter();
@@ -213,9 +212,21 @@ void sma_run(void) {
     if (stop_check(&stop, it, DF)) break;
   }
 
-  print_result(Xb, DF, &stop);
+  memcpy(out->pos, Xb, g_cfg.n_dims * sizeof(double));
+  out->fitness = DF;
+  out->stop    = stop;
 
   free(order);
   free(Xb);
   free(slab);
 }
+
+const Algorithm sma_algorithm = {
+    .name     = "sma",
+    .fields   = sma_fields,
+    .cfg_base = sma_cfg_base,
+    .cfg_size = sizeof(SmaConfig),
+    .validate = sma_validate,
+    .dump     = sma_dump,
+    .run      = sma_run,
+};

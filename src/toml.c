@@ -51,13 +51,15 @@ void parse_toml(const char* filename) {
   toml_datum_t alg = toml_seek(run0, "algorithm");
   if (alg.type == TOML_UNKNOWN) die_at(run_src, NULL, "[[run]] is missing 'algorithm'");
   if (alg.type != TOML_STRING) die_at(run_src, "algorithm", "expected string");
-  select_algorithm(run_src, alg.u.s);
+  const Algorithm* algo = find_algorithm(run_src, alg.u.s);
+  g_cfg.algorithm       = algo;
+  set_defaults(algo->fields, algo->cfg_base());
 
   // --- Apply [common] then [[run]] (last-write-wins) ---
   // The walker also rejects unknown keys and keys in the wrong section
 
   if (common.type == TOML_TABLE) walk_section(common_src, SECTION_COMMON, common, NULL);
-  walk_section(run_src, SECTION_RUN, run0, g_cfg.algorithm);
+  walk_section(run_src, SECTION_RUN, run0, algo);
 
   // --- Validate ---
 

@@ -5,33 +5,22 @@
 
 _Thread_local Config g_cfg;
 
-const Algorithm algorithms[] = {
-    {.name     = "pso",
-     .fields   = pso_fields,
-     .cfg_base = pso_cfg_base,
-     .validate = pso_validate,
-     .dump     = pso_dump,
-     .run      = pso_run},
-    {.name     = "ga",
-     .fields   = ga_fields,
-     .cfg_base = ga_cfg_base,
-     .validate = ga_validate,
-     .dump     = ga_dump,
-     .run      = ga_run},
-    {.name     = "sma",
-     .fields   = sma_fields,
-     .cfg_base = sma_cfg_base,
-     .validate = sma_validate,
-     .dump     = sma_dump,
-     .run      = sma_run},
-    {0},
-};
+Options g_opts;
+
+const Algorithm* const algorithms[] = {&pso_algorithm, &ga_algorithm, &sma_algorithm, NULL};
 
 int main(int argc, char** argv) {
   set_defaults(runner_fields, &g_cfg);
   parse_args(argc, argv);
-  if (g_cfg.interactive) clear_screen();
-  g_cfg.algorithm->run();
+  if (g_opts.interactive) clear_screen();
 
+  double* pos = malloc(g_cfg.n_dims * sizeof(double));
+  if (!pos) die("memory allocation failed");
+
+  RunResult result = {.pos = pos};
+  g_cfg.algorithm->run(&result);
+  print_result(&result);
+
+  free(pos);
   return EXIT_SUCCESS;
 }

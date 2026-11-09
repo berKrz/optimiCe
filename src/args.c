@@ -38,19 +38,19 @@ static void print_help_overview(void) {
       "  -h, --help [ALG]        General help, or help for a specific algorithm\n");
   print_runner_fields();
   printf("\nAlgorithms:\n");
-  for (int i = 0; algorithms[i].name; i++) printf("  %s\n", algorithms[i].name);
+  for (int i = 0; algorithms[i]; i++) printf("  %s\n", algorithms[i]->name);
   printf("\nUse --help ALG to see an algorithm's fields.\n");
 }
 
 static void print_help_algorithm(const char* name) {
-  for (int i = 0; algorithms[i].name; i++) {
-    if (strcmp(name, algorithms[i].name) == 0) {
+  for (int i = 0; algorithms[i]; i++) {
+    if (strcmp(name, algorithms[i]->name) == 0) {
       char where[64];
       scope_text(SCOPE_ALGO, where, sizeof(where));
       int single = (SCOPE_ALGO & (SCOPE_ALGO - 1)) == 0;
       printf("Fields for algorithm '%s' (%s%s%s):\n", name, single ? "" : "in ", where,
              single ? " only" : "");
-      print_help_from_table(algorithms[i].fields, SCOPE_ALGO);
+      print_help_from_table(algorithms[i]->fields, SCOPE_ALGO);
       return;
     }
   }
@@ -60,7 +60,7 @@ static void print_help_algorithm(const char* name) {
 }
 
 static void print_list(void) {
-  for (int i = 0; algorithms[i].name; i++) printf("%s\n", algorithms[i].name);
+  for (int i = 0; algorithms[i]; i++) printf("%s\n", algorithms[i]->name);
 }
 
 void parse_args(int argc, char** argv) {
@@ -84,7 +84,7 @@ void parse_args(int argc, char** argv) {
       case 'f':
       case 'F': config_path = optarg; break;
       case 'i':
-      case 'I': g_cfg.interactive = 1; break;
+      case 'I': g_opts.interactive = 1; break;
       case 'l':
       case 'L': print_list(); exit(EXIT_SUCCESS);
       case 'd':

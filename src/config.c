@@ -28,16 +28,11 @@ static const FitnessEntry* get_fitness_entry(double (*fn)(const double*)) {
   return NULL;  // set_field guarantees a match; unreachable
 }
 
-// --- Algorithm selection ---
+// --- Algorithm lookup ---
 
-void select_algorithm(const char* source, const char* name) {
-  for (int i = 0; algorithms[i].name; i++) {
-    if (strcmp(name, algorithms[i].name) == 0) {
-      g_cfg.algorithm = &algorithms[i];
-      set_defaults(algorithms[i].fields, algorithms[i].cfg_base());
-      return;
-    }
-  }
+const Algorithm* find_algorithm(const char* source, const char* name) {
+  for (int i = 0; algorithms[i]; i++)
+    if (strcmp(name, algorithms[i]->name) == 0) return algorithms[i];
   die_at(source, "algorithm", "unknown algorithm");
 }
 
@@ -205,11 +200,11 @@ static void die_unknown(const char* source, const char* key, Section section,
     snprintf(msg, sizeof(msg), "unknown key for algorithm '%s'", algo->name);
     die_at(source, key, msg);
   }
-  for (int i = 0; algorithms[i].name; i++) {
-    if (find_row(algorithms[i].fields, key)) {
+  for (int i = 0; algorithms[i]; i++) {
+    if (find_row(algorithms[i]->fields, key)) {
       snprintf(msg, sizeof(msg),
                "'%s' is a field of algorithm '%s'; algorithm fields go in [[run]]", key,
-               algorithms[i].name);
+               algorithms[i]->name);
       die_at(source, key, msg);
     }
   }
@@ -374,7 +369,6 @@ void dump_config(void) {
   printf("stagnation     = %d\n", g_cfg.stagnation);
   printf("domain_min     = %g\n", g_cfg.domain_min);
   printf("domain_max     = %g\n", g_cfg.domain_max);
-  printf("interactive    = %s\n", g_cfg.interactive ? "true" : "false");
   printf("fitness        = %s\n", fe ? fe->name : "(unknown)");
 
   if (!g_cfg.algorithm) return;

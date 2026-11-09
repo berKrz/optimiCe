@@ -76,7 +76,7 @@ static const EnumEntry crossover_table[] = {
 
 // --- Field table ---
 
-const FieldSpec ga_fields[] = {
+static const FieldSpec ga_fields[] = {
     {"pop_size", FIELD_INT, SCOPE_ALGO, offsetof(GaConfig, pop_size), NULL, "15",
      "Population size (>= 2)"},
     {"ind_size", FIELD_INT, SCOPE_ALGO, offsetof(GaConfig, ind_size), NULL, "22",
@@ -98,7 +98,7 @@ const FieldSpec ga_fields[] = {
     {NULL, 0, 0, 0, NULL, NULL, NULL},
 };
 
-void* ga_cfg_base(void) { return &cfg; }
+static void* ga_cfg_base(void) { return &cfg; }
 
 // --- Validate ---
 
@@ -140,7 +140,7 @@ static void validate_cut_points(void) {
   }
 }
 
-void ga_validate(void) {
+static void ga_validate(void) {
   if (cfg.pop_size < 2) die("ga: pop_size must be >= 2");
   if (cfg.ind_size < 2 || cfg.ind_size > 63) die("ga: ind_size must be in [2, 63]");
   if (!(cfg.mutation_rate >= 0.0 && cfg.mutation_rate < 1.0))
@@ -165,7 +165,7 @@ void ga_validate(void) {
 
 // --- Dump ---
 
-void ga_dump(void) {
+static void ga_dump(void) {
   printf("pop_size        = %d\n", cfg.pop_size);
   printf("ind_size        = %d\n", cfg.ind_size);
   printf("tournament_size = %d\n", cfg.tournament_size);
@@ -262,7 +262,7 @@ static void mutation(uint64_t* ind, int index) {
   int header     = 0;
   for (int i = 0; i < total_bits; i++) {
     if (rng_next_double() < cfg.mutation_rate) {
-      if (g_cfg.interactive) {
+      if (g_opts.interactive) {
         if (!header) {
           header = 1;
           printf("  Mutation: individual %d\n", index);
@@ -391,7 +391,7 @@ static void weights_rank(const double* fits, double* weights, FitIdx* order, int
 // individual whose cumulative-weight interval contains the draw
 static void spin(uint64_t* pop, GaWork* work, int n, int words) {
   const double* weights = work->weights;
-  double total = 0.0;
+  double        total   = 0.0;
   for (int i = 0; i < n; i++) total += weights[i];
 
   for (int i = 0; i < n; i++) {
@@ -422,15 +422,15 @@ static void selection_wheel(uint64_t* pop, GaWork* work) {
 
   switch (cfg.selection) {
     case ROULETTE:
-      if (g_cfg.interactive) printf("Selection: Roulette\n\n");
+      if (g_opts.interactive) printf("Selection: Roulette\n\n");
       weights_roulette(work->fits, work->weights, cfg.pop_size);
       break;
     case ROULETTE_NORMALIZED:
-      if (g_cfg.interactive) printf("Selection: Normalized roulette\n\n");
+      if (g_opts.interactive) printf("Selection: Normalized roulette\n\n");
       weights_roulette_normalized(work->fits, work->weights, cfg.pop_size);
       break;
     case RANK:
-      if (g_cfg.interactive) printf("Selection: Rank\n\n");
+      if (g_opts.interactive) printf("Selection: Rank\n\n");
       weights_rank(work->fits, work->weights, work->order, cfg.pop_size);
       break;
     case TOURNAMENT: break;  // not a wheel selection; run_selection never routes it here
@@ -442,7 +442,7 @@ static void selection_wheel(uint64_t* pop, GaWork* work) {
 static void selection_tournament(uint64_t* pop, GaWork* work) {
   int words = words_per_ind();
 
-  if (g_cfg.interactive) printf("Selection: Tournament\n\n");
+  if (g_opts.interactive) printf("Selection: Tournament\n\n");
   snapshot(pop, work);
 
   for (int i = 0; i < cfg.pop_size; i++) {
@@ -497,7 +497,7 @@ static void family_compete(uint64_t* a, uint64_t* b, double fit_pa, double fit_p
 
   memcpy(a, family + src[first] * words, words * sizeof(uint64_t));
   memcpy(b, family + src[second] * words, words * sizeof(uint64_t));
-  if (g_cfg.interactive)
+  if (g_opts.interactive)
     printf("  Family %d: kept %s and %s\n", pair, label[first], label[second]);
 }
 
@@ -505,8 +505,8 @@ static void family_compete(uint64_t* a, uint64_t* b, double fit_pa, double fit_p
 static void family_compete_single(uint64_t* a, double fit_pa, int pair, GaWork* work) {
   if (is_better(fit_pa, eval(a, work->tmp))) {
     memcpy(a, work->family, words_per_ind() * sizeof(uint64_t));
-    if (g_cfg.interactive) printf("  Family %d: kept parent 1\n", pair);
-  } else if (g_cfg.interactive) {
+    if (g_opts.interactive) printf("  Family %d: kept parent 1\n", pair);
+  } else if (g_opts.interactive) {
     printf("  Family %d: kept child 1\n", pair);
   }
 }
@@ -636,8 +636,8 @@ static void run_selection(uint64_t* pop, GaWork* work) {
   }
 }
 
-void ga_run(void) {
-  int words    = words_per_ind();
+static void ga_run(RunResult* out) {
+  int words = words_per_ind();
 
   uint64_t* pop = calloc((size_t) cfg.pop_size * (size_t) words, sizeof(uint64_t));
   if (!pop) die("memory allocation failed");
@@ -646,7 +646,7 @@ void ga_run(void) {
 
   init_pop(pop);
 
-  if (g_cfg.interactive) {
+  if (g_opts.interactive) {
     printf("Initial Population\n\n");
     print_pop(pop, tmp);
     wait_for_enter();
@@ -655,7 +655,7 @@ void ga_run(void) {
 
   StopState stop = stop_init();
   for (int gen = 0; gen < g_cfg.iterations; gen++) {
-    if (g_cfg.interactive) {
+    if (g_opts.interactive) {
       print_iteration_header(gen);
       run_selection(pop, &work);
       print_pairs(pop, tmp);
@@ -672,15 +672,26 @@ void ga_run(void) {
     }
     // Best of this generation; it's what both the progress line and the early stop look at
     double gen_best = eval(pop + find_best(pop, tmp) * words, tmp);
-    if (!g_cfg.interactive) print_iteration_line(gen, gen_best);
+    if (!g_opts.interactive) print_iteration_line(gen, gen_best);
     if (stop_check(&stop, gen, gen_best)) break;
   }
 
   // Final result: best of the final generation
-  int    bi = find_best(pop, tmp);
-  double bf = eval(pop + bi * words, tmp);  // leaves `tmp` holding the best position
-  print_result(tmp, bf, &stop);
+  int bi       = find_best(pop, tmp);
+  out->fitness = eval(pop + bi * words, tmp);  // leaves `tmp` holding the best position
+  memcpy(out->pos, tmp, g_cfg.n_dims * sizeof(double));
+  out->stop = stop;
 
   work_free(&work);
   free(pop);
 }
+
+const Algorithm ga_algorithm = {
+    .name     = "ga",
+    .fields   = ga_fields,
+    .cfg_base = ga_cfg_base,
+    .cfg_size = sizeof(GaConfig),
+    .validate = ga_validate,
+    .dump     = ga_dump,
+    .run      = ga_run,
+};

@@ -63,16 +63,33 @@ typedef struct {
   int         value;
 } EnumEntry;
 
+// One per algorithm, defined in the algorithm's own file
 typedef struct Algorithm {
   const char*      name;
   const FieldSpec* fields;
   void* (*cfg_base)(void);  // returns the address of the algo's _Thread_local cfg
+
+  // sizeof the algorithm's cfg. The cfg is copied with memcpy, so it must hold its data by value:
+  // no pointers to owned, mutable or parse-tree memory (DoubleList is the pattern); pointers to
+  // static constants and functions are fine
+  size_t cfg_size;
+
+  // Called once per run, after every field is set and before anything reads the cfg
+  // May resolve derived values (e.g. pso's w_end = w), so dump and run see the final config
   void (*validate)(void);
   void (*dump)(void);
-  void (*run)(void);
+
+  // Fills `out`: fitness, stop state, and n_dims doubles into the caller-owned out->pos
+  // Prints only its per-iteration / interactive output; the caller prints the footer
+  void (*run)(RunResult* out);
 } Algorithm;
 
-extern const Algorithm algorithms[];
+extern const Algorithm pso_algorithm;
+extern const Algorithm ga_algorithm;
+extern const Algorithm sma_algorithm;
+
+// Registry, NULL-terminated - defined in main.c
+extern const Algorithm* const algorithms[];
 
 // Reverse lookup: the name a table maps to `value`, or "?" if none does (utils.c)
 const char* enum_name(const EnumEntry* table, int value);
@@ -103,34 +120,9 @@ void print_help_from_table(const FieldSpec* table, unsigned scope);
 void scope_text(unsigned scope, char* buf, size_t size);
 void set_defaults(const FieldSpec* table, void* base);
 
-// Resolves `name` against `algorithms[]`, sets g_cfg.algorithm, and loads its defaults, every time
-// it's called. toml.c's pre-pass is the only caller
-void select_algorithm(const char* source, const char* name);
+// Resolves `name` against `algorithms[]`; dies at `source` [algorithm] when it isn't registered
+const Algorithm* find_algorithm(const char* source, const char* name);
 
 // Fields that belong to the runner rather than to any algorithm - defined in config.c
 // Declared here because the full FieldSpec type is only visible after this header
 extern const FieldSpec runner_fields[];
-
-// PSO
-extern const FieldSpec pso_fields[];
-
-void* pso_cfg_base(void);
-void  pso_run(void);
-void  pso_dump(void);
-void  pso_validate(void);
-
-// GA
-extern const FieldSpec ga_fields[];
-
-void* ga_cfg_base(void);
-void  ga_run(void);
-void  ga_dump(void);
-void  ga_validate(void);
-
-// SMA
-extern const FieldSpec sma_fields[];
-
-void* sma_cfg_base(void);
-void  sma_run(void);
-void  sma_dump(void);
-void  sma_validate(void);
