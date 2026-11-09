@@ -1,9 +1,8 @@
 # optimiCe example config
 #
-# [common] holds settings shared by every run; a [[run]] may override any of them except seed
-# This version runs exactly one [[run]]: the PSO block below is active, and the GA and SMA blocks
-# after it are alternatives
-#To try one, comment out the active block and uncomment another
+# [common] holds settings shared by every run; a [[run]] may override any of them except seed and
+# replicates. [defaults.<algo>] holds defaults for one algorithm's runs, which a [[run]] may override
+# Every [[run]] below runs `replicates` times, replicate r with seed + r
 # Run `optimice --help` and `optimice --help <algorithm>` for every field and its default
 
 [common]
@@ -15,36 +14,44 @@ domain_max = 5.12
 iterations = 5000      # iteration budget (generations, for GA)
 target_fitness = 1e-5  # stop early once the best is at least this good
 stagnation = 100       # stop early after 100 iterations without improvement
-seed = 42              # set to reproduce a run; when omitted, one is generated and printed
+replicates = 5         # every run below, 5 times
+seed = 42              # base seed; when omitted, one is generated and printed
 
-# --- PSO ------------------------------------------------------------------------------------
-[[run]]
-algorithm = "pso"
+# --- Defaults for every PSO run ---------------------------------------------------------------
+[defaults.pso]
 swarm_size = 30
-w = 0.9                 # inertia at the first iteration...
-w_end = 0.4             # ...decaying linearly to this at the last (omit for constant inertia)
-v_max = 0.2             # velocity cap, as a fraction of the domain width (0 = off)
+w = 0.9            # inertia at the first iteration...
+w_end = 0.4        # ...decaying linearly to this at the last (omit for constant inertia)
+v_max = 0.2        # velocity cap, as a fraction of the domain width (0 = off)
 c1 = 2.0
 c2 = 2.0
+bounds = "reflect" # or "clamp" / "random"
+
+# --- PSO --------------------------------------------------------------------------------------
+[[run]] # pso-1: everything from [defaults.pso]
+algorithm = "pso"
 pbest_init = "position"
 gbest_update = "async"  # or "sync": refresh gbest once per iteration
-bounds = "reflect"      # or "clamp" / "random"
 
-# --- GA -------------------------------------------------------------------------------------
-# [[run]]
-# algorithm     = "ga"
-# pop_size      = 40
-# ind_size      = 16                  # bits per dimension
-# mutation_rate = 0.01
-# selection     = "rank"              # or "roulette" / "roulette_normalized" / "tournament"
-# rank_pressure = 1.5                 # used by rank: expected copies of the best, in [1, 2]
-# crossover     = "n_point"           # or "uniform"
-# cut_points    = [0.3, 0.7]          # used by n_point: [0.6] is classic single-point
-# elitism       = "family"            # each pair keeps the best 2 of parents + children
+[[run]] # pso-2: same, with constant inertia
+algorithm = "pso"
+w_end = 0.9
 
-# --- SMA ------------------------------------------------------------------------------------
-# [[run]]
-# algorithm = "sma"
-# pop_size  = 30
-# z         = 0.03                    # per-slime probability of a full random re-init
-# bounds    = "reflect"               # or "clamp" / "random"
+# --- GA ---------------------------------------------------------------------------------------
+[[run]] # ga-1
+algorithm = "ga"
+pop_size = 40
+ind_size = 16           # bits per dimension
+mutation_rate = 0.01
+selection = "rank"      # or "roulette" / "roulette_normalized" / "tournament"
+rank_pressure = 1.5     # used by rank: expected copies of the best, in [1, 2]
+crossover = "n_point"   # or "uniform"
+cut_points = [0.3, 0.7] # used by n_point: [0.6] is classic single-point
+elitism = "family"      # each pair keeps the best 2 of parents + children
+
+# --- SMA --------------------------------------------------------------------------------------
+[[run]] # sma-1
+algorithm = "sma"
+pop_size = 30
+z = 0.03           # per-slime probability of a full random re-init
+bounds = "reflect" # or "clamp" / "random"

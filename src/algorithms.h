@@ -32,14 +32,15 @@ typedef struct {
 // appear in. --help groups fields by scope, and the walker rejects a key whose scope lacks the
 // current section's bit
 typedef enum {
-  SECTION_COMMON = 1 << 0,  // [common]
-  SECTION_RUN    = 1 << 1,  // [[run]]
+  SECTION_COMMON   = 1 << 0,  // [common]
+  SECTION_RUN      = 1 << 1,  // [[run]]
+  SECTION_DEFAULTS = 1 << 2,  // [defaults.<algo>]
 } Section;
 
 // Named scopes for the masks most rows share
 enum {
-  SCOPE_GLOBAL = SECTION_COMMON | SECTION_RUN,  // a [[run]] value overrides [common]
-  SCOPE_ALGO   = SECTION_RUN,                   // every algorithm field
+  SCOPE_GLOBAL = SECTION_COMMON | SECTION_RUN,    // a [[run]] value overrides [common]
+  SCOPE_ALGO   = SECTION_RUN | SECTION_DEFAULTS,  // every algorithm field
 };
 
 // Pure data row. Walker reads `type` to decide how to parse a datum, consults
@@ -109,6 +110,7 @@ void apply_bounds(double* x, double* v, BoundsMode mode);
 
 // Walks the keys of `tab` (a TOML_TABLE datum) in file order, resolving each against runner_fields
 // (written into g_cfg) and, when `algo` is given, the algorithm's own fields (written into its cfg)
+// `algo` is given for [[run]] and [defaults.<algo>], NULL for [common]
 // Dies on unknown keys and on keys whose scope excludes `section`
 // `algorithm` itself is skipped: toml.c's pre-pass resolves it before any walk
 void walk_section(const char* source, Section section, toml_datum_t tab, const Algorithm* algo);
@@ -120,8 +122,8 @@ void print_help_from_table(const FieldSpec* table, unsigned scope);
 void scope_text(unsigned scope, char* buf, size_t size);
 void set_defaults(const FieldSpec* table, void* base);
 
-// Resolves `name` against `algorithms[]`; dies at `source` [algorithm] when it isn't registered
-const Algorithm* find_algorithm(const char* source, const char* name);
+// Index of `name` in `algorithms[]`, or -1 when it isn't registered
+int find_algorithm(const char* name);
 
 // Fields that belong to the runner rather than to any algorithm - defined in config.c
 // Declared here because the full FieldSpec type is only visible after this header

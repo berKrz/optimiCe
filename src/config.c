@@ -30,10 +30,10 @@ static const FitnessEntry* get_fitness_entry(double (*fn)(const double*)) {
 
 // --- Algorithm lookup ---
 
-const Algorithm* find_algorithm(const char* source, const char* name) {
+int find_algorithm(const char* name) {
   for (int i = 0; algorithms[i]; i++)
-    if (strcmp(name, algorithms[i]->name) == 0) return algorithms[i];
-  die_at(source, "algorithm", "unknown algorithm");
+    if (strcmp(name, algorithms[i]->name) == 0) return i;
+  return -1;
 }
 
 // --- set_field: the single write path shared by walker and defaults ---
@@ -180,8 +180,9 @@ void scope_text(unsigned scope, char* buf, size_t size) {
     unsigned    bit;
     const char* name;
   } names[] = {
-      {SECTION_COMMON, "[common]"},
-      {SECTION_RUN,    "[[run]]" },
+      {SECTION_COMMON,   "[common]"         },
+      {SECTION_RUN,      "[[run]]"          },
+      {SECTION_DEFAULTS, "[defaults.<algo>]"},
   };
   size_t n = 0;
   buf[0]   = '\0';
@@ -193,18 +194,18 @@ void scope_text(unsigned scope, char* buf, size_t size) {
 }
 
 // Unknown-key error, with a hint when the key exists somewhere else
-static void die_unknown(const char* source, const char* key, Section section,
-                        const Algorithm* algo) {
-  char msg[160];
-  if (section == SECTION_RUN) {
+static void die_unknown(const char* source, const char* key, const Algorithm* algo) {
+  char msg[192];
+  if (algo) {
     snprintf(msg, sizeof(msg), "unknown key for algorithm '%s'", algo->name);
     die_at(source, key, msg);
   }
   for (int i = 0; algorithms[i]; i++) {
     if (find_row(algorithms[i]->fields, key)) {
-      snprintf(msg, sizeof(msg),
-               "'%s' is a field of algorithm '%s'; algorithm fields go in [[run]]", key,
-               algorithms[i]->name);
+      char where[64];
+      scope_text(SCOPE_ALGO, where, sizeof(where));
+      snprintf(msg, sizeof(msg), "'%s' is a field of algorithm '%s'; algorithm fields go in %s",
+               key, algorithms[i]->name, where);
       die_at(source, key, msg);
     }
   }
@@ -224,7 +225,7 @@ void walk_section(const char* source, Section section, toml_datum_t tab, const A
       row  = arow;
       base = algo->cfg_base();
     }
-    if (!row) die_unknown(source, key, section, algo);
+    if (!row) die_unknown(source, key, algo);
 
     if (!(row->scope & section)) {
       char where[64], msg[96];
@@ -269,7 +270,9 @@ void set_defaults(const FieldSpec* table, void* base) {
 // Row order is --help order: [common]-only fields first, [[run]]-only last
 const FieldSpec runner_fields[] = {
     {"seed", FIELD_UINT, SECTION_COMMON, offsetof(Config, seed), NULL, NULL,
-     "RNG seed (omitted = generated)"},
+     "Base seed; replicate r uses seed + r (omitted = generated)"},
+    {"replicates", FIELD_INT, SECTION_COMMON, offsetof(Config, replicates), NULL, "1",
+     "Repetitions of every run, one seed each"},
     {"direction", FIELD_ENUM, SCOPE_GLOBAL, offsetof(Config, direction), direction_table,
      "minimize", "Direction: minimize | maximize"},
     {"n_dims", FIELD_INT, SCOPE_GLOBAL, offsetof(Config, n_dims), NULL, "2",
@@ -356,12 +359,12 @@ void validate(void) {
 
 // --- Dump ---
 
+// One run's resolved config, as loaded into g_cfg and the algorithm's cfg; seed and replicates are
+// batch-wide, so dump_batch prints them once
 void dump_config(void) {
   const FitnessEntry* fe = get_fitness_entry(g_cfg.fitness_fn);
 
-  printf("# resolved config\n");
   printf("algorithm      = %s\n", g_cfg.algorithm ? g_cfg.algorithm->name : "(unset)");
-  printf("seed           = 0x%08x\n", g_cfg.seed);
   printf("direction      = %s\n", enum_name(direction_table, g_cfg.direction));
   printf("n_dims         = %d\n", g_cfg.n_dims);
   printf("iterations     = %d\n", g_cfg.iterations);
@@ -372,6 +375,6 @@ void dump_config(void) {
   printf("fitness        = %s\n", fe ? fe->name : "(unknown)");
 
   if (!g_cfg.algorithm) return;
-  printf("\n# %s arm\n", g_cfg.algorithm->name);
+  printf("\n# %s fields\n", g_cfg.algorithm->name);
   if (g_cfg.algorithm->dump) g_cfg.algorithm->dump();  // defensive
 }

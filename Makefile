@@ -19,6 +19,7 @@ SRC    = $(SRCDIR)/main.c \
          $(SRCDIR)/bounds.c \
          $(SRCDIR)/config.c \
          $(SRCDIR)/toml.c \
+         $(SRCDIR)/batch.c \
          $(SRCDIR)/args.c \
          $(SRCDIR)/algorithms/pso.c \
          $(SRCDIR)/algorithms/ga.c \

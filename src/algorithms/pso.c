@@ -65,14 +65,14 @@ static void* pso_cfg_base(void) { return &cfg; }
 // --- Validation ---
 
 static void pso_validate(void) {
-  if (cfg.swarm_size <= 0) die("pso: swarm_size must be positive");
-  if (cfg.w < 0.0) die("pso: w must be non-negative");
+  if (cfg.swarm_size <= 0) die("swarm_size must be positive");
+  if (cfg.w < 0.0) die("w must be non-negative");
   // Not a check: an unset w_end means constant inertia, resolved here so dump and run see it
   if (isnan(cfg.w_end)) cfg.w_end = cfg.w;
-  if (cfg.w_end < 0.0) die("pso: w_end must be non-negative");
-  if (cfg.v_max < 0.0) die("pso: v_max must be non-negative (0 disables the cap)");
-  if (cfg.c1 < 0.0) die("pso: c1 must be non-negative");
-  if (cfg.c2 < 0.0) die("pso: c2 must be non-negative");
+  if (cfg.w_end < 0.0) die("w_end must be non-negative");
+  if (cfg.v_max < 0.0) die("v_max must be non-negative (0 disables the cap)");
+  if (cfg.c1 < 0.0) die("c1 must be non-negative");
+  if (cfg.c2 < 0.0) die("c2 must be non-negative");
 }
 
 // --- Dump ---
@@ -233,12 +233,10 @@ static void print_swarm(const Particle* swarm, double gbest_fitness) {
 static void pso_run(RunResult* out) {
   int per_particle = 3 * g_cfg.n_dims;
 
-  double*   data      = malloc(cfg.swarm_size * per_particle * sizeof(double));
-  Particle* swarm     = malloc(cfg.swarm_size * sizeof(Particle));
-  double*   gbest_pos = malloc(g_cfg.n_dims * sizeof(double));
+  double*   data      = xmalloc(cfg.swarm_size * per_particle * sizeof(double));
+  Particle* swarm     = xmalloc(cfg.swarm_size * sizeof(Particle));
+  double*   gbest_pos = xmalloc(g_cfg.n_dims * sizeof(double));
   double    gbest_fitness;
-
-  if (!data || !swarm || !gbest_pos) die("memory allocation failed");
 
   init_swarm(swarm, data, gbest_pos, &gbest_fitness);
 

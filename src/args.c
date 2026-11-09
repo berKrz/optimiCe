@@ -32,7 +32,7 @@ static void print_help_overview(void) {
       "\n"
       "Options:\n"
       "  -f, --config <file>     TOML configuration file (required)\n"
-      "  -i, --interactive       Pause after each iteration\n"
+      "  -i, --interactive       Pause after each iteration (single job only)\n"
       "  -l, --list              List available algorithms\n"
       "  -d, --dump-config       Print the resolved configuration and exit\n"
       "  -h, --help [ALG]        General help, or help for a specific algorithm\n");
@@ -63,7 +63,7 @@ static void print_list(void) {
   for (int i = 0; algorithms[i]; i++) printf("%s\n", algorithms[i]->name);
 }
 
-void parse_args(int argc, char** argv) {
+Batch parse_args(int argc, char** argv) {
   static const struct option long_options[] = {
       {"config",      required_argument, NULL, 'f'},
       {"interactive", no_argument,       NULL, 'i'},
@@ -109,10 +109,23 @@ void parse_args(int argc, char** argv) {
   if (optind < argc) die("unexpected argument");
   if (!config_path) die("--config / -f is required");
 
-  parse_toml(config_path);
+  Batch batch = load_batch(config_path);
+  int   jobs  = batch_jobs(&batch);
+
+  // Checked before the dump: --dump-config only prints configs that would run
+  if (g_opts.interactive && jobs > 1) {
+    char msg[160];
+    snprintf(msg, sizeof(msg),
+             "--interactive needs a single job (got %d run%s x %d replicate%s = %d)", batch.n_runs,
+             batch.n_runs == 1 ? "" : "s", batch.replicates, batch.replicates == 1 ? "" : "s",
+             jobs);
+    die(msg);
+  }
+  g_opts.per_iteration = jobs == 1;
 
   if (want_config) {
-    dump_config();
+    dump_batch(&batch);
     exit(EXIT_SUCCESS);
   }
+  return batch;
 }

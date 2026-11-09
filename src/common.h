@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdnoreturn.h>
 
@@ -12,7 +13,8 @@ typedef enum { MINIMIZE, MAXIMIZE } OptDirection;
 // live in a file-scope `_Thread_local cfg` inside its own translation unit --
 // private, out of the shared header and per-thread
 typedef struct {
-  uint32_t     seed;
+  uint32_t     seed;        // the job's seed while it runs; the base seed in a stored RunConfig
+  int          replicates;  // [common]-only; load_batch copies it into the Batch
   OptDirection direction;
   int          n_dims;
   double       domain_min;
@@ -32,15 +34,44 @@ extern _Thread_local Config g_cfg;
 // Set once by parse_args before anything runs, read-only afterwards, so shared by every thread
 typedef struct {
   int interactive;
+  int per_iteration;  // print a progress line per iteration; on only for single-job batches
 } Options;
 
 extern Options g_opts;
+
+// When set, die() reports it as the error's location: the run being validated during loading, or
+// the job a thread is running. Thread-local, so each thread names its own job
+// Whoever sets it clears it before the buffer it points to goes away, so a later die() never reads
+// a stale or dangling location
+extern _Thread_local const char* g_where;
+
+// A [[run]] after loading: its label and the images of both configs, resolved and validated
+typedef struct {
+  char   label[32];  // "pso-2": algorithm name + per-algorithm counter, by position in the file
+  Config cfg;        // runner fields; cfg.seed holds the base seed
+  void*  algo_cfg;   // cfg.algorithm->cfg_size bytes: the algorithm's cfg, post-validate
+} RunConfig;
+
+// Everything Phase 2 needs. Read-only once loaded, so threads can share it
+// Job j is run j / replicates, replicate j % replicates, seeded with seed + replicate (common
+// random numbers: replicate r gets the same seed in every run)
+typedef struct {
+  RunConfig* runs;
+  int        n_runs;
+  int        replicates;
+  uint32_t   seed;            // base seed
+  int        seed_generated;  // 1 when the config omitted seed
+} Batch;
 
 #define LINE_WIDTH 50
 
 // utils.c
 noreturn void die(const char* msg);
 noreturn void die_at(const char* source, const char* key, const char* msg);
+
+// malloc / calloc that die on failure
+void* xmalloc(size_t size);
+void* xcalloc(size_t n, size_t size);
 
 void clear_screen(void);
 void wait_for_enter(void);
@@ -90,11 +121,18 @@ int      rng_next_bit(void);
 void validate(void);
 void dump_config(void);
 
-// toml.c
-void parse_toml(const char* filename);
+// toml.c - Phase 1: parses, merges and validates every [[run]]; the TOML tree is freed on return
+Batch load_batch(const char* filename);
 
-// args.c
-void parse_args(int argc, char** argv);
+// batch.c - Phase 2
+int  batch_jobs(const Batch* ex);    // runs x replicates
+void load_run(const RunConfig* rc);  // copies both config images into this thread's cfgs
+void run_batch(const Batch* ex);
+void dump_batch(const Batch* ex);
+void free_batch(Batch* ex);
+
+// args.c - CLI, loading, the --interactive check and --dump-config; returns only to run
+Batch parse_args(int argc, char** argv);
 
 // fitness.c
 double sphere(const double* pos);

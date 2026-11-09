@@ -35,8 +35,8 @@ static void* sma_cfg_base(void) { return &cfg; }
 // --- Validate ---
 
 static void sma_validate(void) {
-  if (cfg.pop_size <= 0) die("sma: pop_size must be positive");
-  if (cfg.z < 0.0 || cfg.z > 1.0) die("sma: z must be in [0.0, 1.0]");
+  if (cfg.pop_size <= 0) die("pop_size must be positive");
+  if (cfg.z < 0.0 || cfg.z > 1.0) die("z must be in [0.0, 1.0]");
 }
 
 // --- Dump ---
@@ -92,11 +92,9 @@ static void print_pop(const double* positions, const double* fits, double DF) {
 static void sma_run(RunResult* out) {
   // Single slab for the three per-slime arrays, laid out end-to-end:
   // [ positions (pop_size*n) | weights (pop_size*n) | fits (pop_size) ]
-  double* slab  = malloc(cfg.pop_size * (2 * g_cfg.n_dims + 1) * sizeof(double));
-  double* Xb    = malloc(g_cfg.n_dims * sizeof(double));
-  FitIdx* order = malloc(cfg.pop_size * sizeof(FitIdx));
-
-  if (!slab || !Xb || !order) die("memory allocation failed");
+  double* slab  = xmalloc(cfg.pop_size * (2 * g_cfg.n_dims + 1) * sizeof(double));
+  double* Xb    = xmalloc(g_cfg.n_dims * sizeof(double));
+  FitIdx* order = xmalloc(cfg.pop_size * sizeof(FitIdx));
 
   double* positions = slab;
   double* weights   = slab + cfg.pop_size * g_cfg.n_dims;

@@ -2,7 +2,7 @@
 
 A runner for metaheuristic optimization algorithms, written in C.
 
-optimiCe runs an optimization algorithm against a chosen benchmark fitness function and reports the best solution it finds. The algorithm, fitness function, and all parameters are specified in a TOML configuration file.
+optimiCe runs optimization algorithms against a chosen benchmark fitness function and reports the best solution each run finds. One configuration file describes a whole batch: any number of runs, each with its own algorithm and parameters, repeated over a set number of seeds. The algorithms, fitness function, and all parameters are specified in a TOML configuration file.
 
 ## Common
 
@@ -10,10 +10,11 @@ optimiCe runs an optimization algorithm against a chosen benchmark fitness funct
 - N-dimensional continuous search space
 - Minimization or maximization
 - Iteration budget shared by every algorithm (`iterations`; generations, for GA), with two optional early stoppers: `target_fitness` ends the run once the current best is at least as good as the target, and `stagnation` ends it after that many consecutive iterations without improving the best-ever. The final result says when and why a run stopped early
-- Reproducible runs: `seed` can be set in the configuration; when omitted, one is generated and printed in the final result so any run can be rerun exactly
-- Configuration errors caught at startup, with messages pointing at the offending section and key
-- Interactive step-through mode (`-i`) for inspection
-- `--dump-config` prints the resolved configuration for debugging
+- Batches: several `[[run]]` sections in one file, each repeated `replicates` times, with shared settings in `[common]` and per-algorithm defaults in `[defaults.<algo>]` (see [Batches](#batches))
+- Reproducible runs: every job prints the seed it ran with, and that seed reruns it exactly. `seed` can be set in the configuration; when omitted, one is generated and printed
+- Configuration errors caught at startup, before anything runs, with messages pointing at the offending section, run, and key
+- Interactive step-through mode (`-i`) for inspecting a single run
+- `--dump-config` prints every run's resolved configuration for debugging
 
 ## PSO
 
@@ -84,14 +85,14 @@ If you install it under a non-default prefix, point `pkg-config` at it when buil
 | Flag       | Long form       | Description                                                |
 |------------|-----------------|------------------------------------------------------------|
 | `-f FILE`  | `--config FILE` | Path to TOML configuration file (required)                 |
-| `-i`       | `--interactive` | Pause after each iteration for inspection                  |
+| `-i`       | `--interactive` | Pause after each iteration; the batch must be a single job |
 | `-l`       | `--list`        | List available algorithms                                  |
 | `-d`       | `--dump-config` | Print the resolved configuration and exit                  |
 | `-h [ALG]` | `--help [ALG]`  | General help, or algorithm-specific help if `ALG` is given |
 
 ## Configuration
 
-All parameters are set in a TOML file passed via `-f`, split into a `[common]` section for algorithm-agnostic fields and a `[[run]]` section carrying the algorithm selection and its algorithm-specific fields. See [`example.toml`](example.toml) for a fuller example covering every algorithm.
+All parameters are set in a TOML file passed via `-f`, split into a `[common]` section for algorithm-agnostic fields, optional `[defaults.<algo>]` sections with defaults for one algorithm, and one or more `[[run]]` sections, each carrying an algorithm selection and its algorithm-specific fields. See [`example.toml`](example.toml) for a fuller example covering every algorithm.
 
 ```toml
 # optimice example config - minimal PSO run
@@ -117,16 +118,54 @@ pbest_init = "position"
 ### Syntax
 
 - `#` starts a comment, either on its own line or after a value. Blank lines are ignored.
-- Only two top-level sections are allowed: `[common]` (optional) and `[[run]]` (required). This version runs exactly one `[[run]]`.
-- `algorithm` is required and goes in `[[run]]`. It selects the algorithm and loads its defaults before anything else is applied, so its position inside the section doesn't matter.
-- `seed` goes in `[common]` only.
+- Only three kinds of top-level sections are allowed: `[common]` (optional), `[defaults.<algo>]` (optional, one per algorithm) and `[[run]]` (required, one or more).
+- `algorithm` is required in every `[[run]]`. It selects the algorithm and loads its defaults before anything else is applied, so its position inside the section doesn't matter.
+- `seed` and `replicates` go in `[common]` only.
 - The other runner fields can go in `[common]`, in `[[run]]`, or both. A value in `[[run]]` overrides the one in `[common]`.
-- Algorithm fields go in `[[run]]`.
+- Algorithm fields go in `[[run]]` or in `[defaults.<algo>]` for their algorithm. A value in `[[run]]` overrides the one in `[defaults.<algo>]`.
+- A `[defaults.<algo>]` section must name a registered algorithm, but its keys are only checked when some `[[run]]` uses that algorithm: a block for an algorithm no run uses is skipped, so it can stay in the file while those runs are commented out.
 - Keys are written exactly as listed in the tables below, with underscores.
 - Each key may appear only once per section. TOML rejects duplicates at parse time.
 - Values are typed: `int` fields take integers (`30`, not `30.0`), `float` fields take floats or integers (`5` is read as `5.0`), and `enum` / `name` fields take quoted strings (`"sphere"`).
-- Unknown keys, wrongly typed values, and keys in the wrong section are hard errors at startup. Messages name the file, section, and key, e.g. `Error at 'example.toml [[run]]' [swarm-size]: unknown key for algorithm 'pso'`.
-- Range and cross-field checks run after the whole file is read: `domain_min < domain_max`, each fitness function's `n_dims` and domain requirements, and each algorithm's own constraints.
+- Unknown keys, wrongly typed values, and keys in the wrong section are hard errors at startup. Messages name the file, section, and key, and a run by its label, e.g. `Error at 'example.toml [[run]] pso-2' [swarm-size]: unknown key for algorithm 'pso'`. A run whose `algorithm` is missing or unknown has no label yet and is named by its position instead (`[[run]] #3`).
+- Range and cross-field checks run on each run's merged configuration, after the whole file is read: `domain_min < domain_max`, each fitness function's `n_dims` and domain requirements, and each algorithm's own constraints. A problem that comes from `[common]` is reported against the first run it affects.
+- Every check runs before the first job starts, so a configuration either runs completely or not at all.
+
+### Batches
+
+A batch is every `[[run]]` repeated `replicates` times; each repetition of a run is a job.
+
+- **Labels.** Each run is labelled by its algorithm and its position among the runs of that algorithm: `pso-1`, `pso-2`, `ga-1`, … The label depends on the order of the `[[run]]` sections, so commenting a run out renumbers the ones after it.
+- **Precedence.** A runner field takes its value from `[[run]]`, else `[common]`, else its default. An algorithm field takes it from `[[run]]`, else `[defaults.<algo>]`, else its default.
+- **Seeds.** `seed` is the batch's base seed: replicate `r` runs with `seed + r` (wrapping around at 2³²), and that's true in every run. Replicate 3 of `pso-1` and replicate 3 of `ga-1` use the same seed, so every run faces the same sequence of seeds (common random numbers). Statistical tests that pair or block on replicates, like Friedman, match this design; tests that assume independent samples don't.
+- **Reproducing a job.** Every job prints its seed. Setting `seed` to it, `replicates = 1`, and keeping only that run reproduces the job exactly. Likewise, replicates 5 to 9 of a batch are `seed + 5` with `replicates = 5`.
+- **Output.** A single job prints a line per iteration and a full final result, as before. A batch with more than one job prints one line per job instead, with its label, replicate, seed, best fitness, and early stop if any. Lines come out in job order (every replicate of the first run, then the second, …), each as soon as it and all jobs before it have finished.
+- **`--interactive`** needs a single job: one `[[run]]` and `replicates = 1`.
+- **`--dump-config`** prints the base seed and `replicates` once, then each run's full resolved configuration, defaults included.
+
+```toml
+[common]
+fitness    = "rastrigin"
+n_dims     = 10
+iterations = 1000
+replicates = 30
+seed       = 42
+
+[defaults.pso]
+w     = 0.9
+w_end = 0.4
+
+[[run]]            # pso-1: decaying inertia, from [defaults.pso]
+algorithm = "pso"
+
+[[run]]            # pso-2: constant inertia
+algorithm = "pso"
+w_end     = 0.9
+
+[[run]]            # ga-1
+algorithm = "ga"
+pop_size  = 40
+```
 
 ### Runner fields
 
@@ -134,7 +173,8 @@ Fields that belong to the runner rather than to any algorithm.
 
 | Key              | Type   | Default    | Description                                                                                                  |
 |------------------|--------|------------|--------------------------------------------------------------------------------------------------------------|
-| `seed`           | uint32 | generated  | RNG seed. When omitted, one is generated and reported in the final result. `[common]` only                   |
+| `seed`           | uint32 | generated  | Base seed; replicate `r` of every run uses `seed + r`. When omitted, one is generated and printed. `[common]` only |
+| `replicates`     | int    | `1`        | Number of times every run is repeated, each with its own seed. At least 1. `[common]` only                   |
 | `direction`      | enum   | `minimize` | `minimize` or `maximize`                                                                                     |
 | `n_dims`         | int    | `2`        | Number of dimensions                                                                                         |
 | `iterations`     | int    | `100`      | Iteration budget, the hard cap on every run (generations, for GA)                                            |

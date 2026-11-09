@@ -12,8 +12,11 @@ const char* enum_name(const EnumEntry* table, int value) {
   return "?";
 }
 
+_Thread_local const char* g_where;
+
 void die(const char* msg) {
-  fprintf(stderr, "Error: %s\n", msg);
+  if (g_where) fprintf(stderr, "Error at '%s': %s\n", g_where, msg);
+  else fprintf(stderr, "Error: %s\n", msg);
   fprintf(stderr, "Run with --help to see available options.\n");
   exit(EXIT_FAILURE);
 }
@@ -23,6 +26,18 @@ void die_at(const char* source, const char* key, const char* msg) {
   else fprintf(stderr, "Error at '%s': %s\n", source, msg);
   fprintf(stderr, "Run with --help to see available options.\n");
   exit(EXIT_FAILURE);
+}
+
+void* xmalloc(size_t size) {
+  void* p = malloc(size);
+  if (!p) die("memory allocation failed");
+  return p;
+}
+
+void* xcalloc(size_t n, size_t size) {
+  void* p = calloc(n, size);
+  if (!p) die("memory allocation failed");
+  return p;
 }
 
 void clear_screen(void) {
@@ -51,6 +66,7 @@ void print_iteration_header(int iter) {
 }
 
 void print_iteration_line(int iter, double best_fitness) {
+  if (!g_opts.per_iteration) return;
   printf("Iteration %3d   best = %g\n", iter, best_fitness);
 }
 

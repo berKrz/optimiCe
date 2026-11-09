@@ -113,27 +113,27 @@ static int cut_index(double r) { return (int) (cfg.ind_size * r); }
 static void validate_cut_points(void) {
   const DoubleList* c = &cfg.cut_points;
   char              msg[192];
-  if (c->n < 1) die("ga: cut_points must have at least one element");
+  if (c->n < 1) die("cut_points must have at least one element");
   for (int i = 0; i < c->n; i++) {
     if (!(c->v[i] > 0.0 && c->v[i] < 1.0)) {
-      snprintf(msg, sizeof(msg), "ga: cut_points[%d] = %g must be in (0.0, 1.0)", i, c->v[i]);
+      snprintf(msg, sizeof(msg), "cut_points[%d] = %g must be in (0.0, 1.0)", i, c->v[i]);
       die(msg);
     }
     if (i > 0 && !(c->v[i] > c->v[i - 1])) {
-      snprintf(msg, sizeof(msg), "ga: cut_points must be strictly increasing (%g after %g)",
-               c->v[i], c->v[i - 1]);
+      snprintf(msg, sizeof(msg), "cut_points must be strictly increasing (%g after %g)", c->v[i],
+               c->v[i - 1]);
       die(msg);
     }
     int idx = cut_index(c->v[i]);
     if (idx < 1) {
       snprintf(msg, sizeof(msg),
-               "ga: cut_points[%d] = %g lands on bit 0 with ind_size = %d (needs >= %g)", i,
-               c->v[i], cfg.ind_size, 1.0 / cfg.ind_size);
+               "cut_points[%d] = %g lands on bit 0 with ind_size = %d (needs >= %g)", i, c->v[i],
+               cfg.ind_size, 1.0 / cfg.ind_size);
       die(msg);
     }
     if (i > 0 && idx == cut_index(c->v[i - 1])) {
       snprintf(msg, sizeof(msg),
-               "ga: cut_points %g and %g land on the same bit (%d) with ind_size = %d", c->v[i - 1],
+               "cut_points %g and %g land on the same bit (%d) with ind_size = %d", c->v[i - 1],
                c->v[i], idx, cfg.ind_size);
       die(msg);
     }
@@ -141,17 +141,17 @@ static void validate_cut_points(void) {
 }
 
 static void ga_validate(void) {
-  if (cfg.pop_size < 2) die("ga: pop_size must be >= 2");
-  if (cfg.ind_size < 2 || cfg.ind_size > 63) die("ga: ind_size must be in [2, 63]");
+  if (cfg.pop_size < 2) die("pop_size must be >= 2");
+  if (cfg.ind_size < 2 || cfg.ind_size > 63) die("ind_size must be in [2, 63]");
   if (!(cfg.mutation_rate >= 0.0 && cfg.mutation_rate < 1.0))
-    die("ga: mutation_rate must be in [0.0, 1.0)");
+    die("mutation_rate must be in [0.0, 1.0)");
   // tournament_size is ignored under other selections, so it's only checked when in use
   if (cfg.selection == TOURNAMENT) {
-    if (cfg.tournament_size < 2) die("ga: tournament_size must be >= 2");
+    if (cfg.tournament_size < 2) die("tournament_size must be >= 2");
     if (cfg.tournament_size > cfg.pop_size) {
       char msg[160];
       snprintf(msg, sizeof(msg),
-               "ga: tournament_size must be at most pop_size (pop_size=%d, tournament_size=%d)",
+               "tournament_size must be at most pop_size (pop_size=%d, tournament_size=%d)",
                cfg.pop_size, cfg.tournament_size);
       die(msg);
     }
@@ -160,7 +160,7 @@ static void ga_validate(void) {
   if (cfg.crossover == XOVER_N_POINT) validate_cut_points();
   // rank_pressure is only checked when in use
   if (cfg.selection == RANK && !(cfg.rank_pressure >= 1.0 && cfg.rank_pressure <= 2.0))
-    die("ga: rank_pressure must be in [1.0, 2.0]");
+    die("rank_pressure must be in [1.0, 2.0]");
 }
 
 // --- Dump ---
@@ -298,16 +298,14 @@ typedef struct {
 static GaWork work_alloc(void) {
   size_t n = (size_t) cfg.pop_size;
   GaWork w = {
-      .fits    = malloc(n * sizeof(double)),
-      .weights = malloc(n * sizeof(double)),
-      .order   = malloc(n * sizeof(FitIdx)),
-      .picked  = malloc(n * sizeof(int)),
-      .aux     = malloc(n * (size_t) words_per_ind() * sizeof(uint64_t)),
-      .family  = malloc(4 * (size_t) words_per_ind() * sizeof(uint64_t)),
-      .tmp     = malloc((size_t) g_cfg.n_dims * sizeof(double)),
+      .fits    = xmalloc(n * sizeof(double)),
+      .weights = xmalloc(n * sizeof(double)),
+      .order   = xmalloc(n * sizeof(FitIdx)),
+      .picked  = xmalloc(n * sizeof(int)),
+      .aux     = xmalloc(n * (size_t) words_per_ind() * sizeof(uint64_t)),
+      .family  = xmalloc(4 * (size_t) words_per_ind() * sizeof(uint64_t)),
+      .tmp     = xmalloc((size_t) g_cfg.n_dims * sizeof(double)),
   };
-  if (!w.fits || !w.weights || !w.order || !w.picked || !w.aux || !w.family || !w.tmp)
-    die("memory allocation failed");
   return w;
 }
 
@@ -619,7 +617,7 @@ static void init_pop(uint64_t* pop) {
   int words      = words_per_ind();
   int total_bits = g_cfg.n_dims * cfg.ind_size;
 
-  // calloc in ga_run already zeroed the buffer; just set the 1 bits
+  // xcalloc in ga_run already zeroed the buffer; just set the 1 bits
   for (int i = 0; i < cfg.pop_size; i++)
     for (int b = 0; b < total_bits; b++)
       if (rng_next_bit()) bit_set(pop + i * words, b, 1);
@@ -639,10 +637,9 @@ static void run_selection(uint64_t* pop, GaWork* work) {
 static void ga_run(RunResult* out) {
   int words = words_per_ind();
 
-  uint64_t* pop = calloc((size_t) cfg.pop_size * (size_t) words, sizeof(uint64_t));
-  if (!pop) die("memory allocation failed");
-  GaWork  work = work_alloc();
-  double* tmp  = work.tmp;
+  uint64_t* pop  = xcalloc((size_t) cfg.pop_size * (size_t) words, sizeof(uint64_t));
+  GaWork    work = work_alloc();
+  double*   tmp  = work.tmp;
 
   init_pop(pop);
 
