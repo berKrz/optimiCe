@@ -1,13 +1,18 @@
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <threads.h>
+#include <unistd.h>
 
 #include "algorithms.h"
 #include "common.h"
 
-// Phase 2: runs every job of a loaded Batch and prints its results
+// Runs every job of a loaded Batch and prints its results
 // Job j is run j / replicates, replicate j % replicates; results land in results[j], and lines
 // are printed in job order (see job_finished), so the output doesn't depend on finishing order
+// Jobs run in parallel on min(jobs, CPU cores) threads. A job only touches its own thread's state
+// (g_cfg, the algorithm's cfg, the RNG, g_where) and its own results[j]; the Batch is read-only
 
 int batch_jobs(const Batch* batch) { return batch->n_runs * batch->replicates; }
 
@@ -86,6 +91,62 @@ static void job_finished(Printer* p, int j) {
   fflush(stdout);
 }
 
+// --- Worker pool ---
+//
+// Every job is known up front, so the pool is a shared counter: each worker takes the next job
+// number, runs it, and takes another until none remain, then exits
+// Workers never wait for each other; the mutex only guards the printer
+
+typedef struct {
+  const Batch* batch;
+  RunResult*   results;
+  Printer*     printer;
+  atomic_int   next;  // next job to hand out
+  mtx_t        print_lock;
+} Pool;
+
+static int worker(void* arg) {
+  Pool* pool  = arg;
+  int   total = batch_jobs(pool->batch);
+
+  for (;;) {
+    int j = atomic_fetch_add(&pool->next, 1);
+    if (j >= total) break;
+
+    run_job(pool->batch, j, &pool->results[j]);
+
+    mtx_lock(&pool->print_lock);
+    job_finished(pool->printer, j);
+    mtx_unlock(&pool->print_lock);
+  }
+  return 0;
+}
+
+// More threads than cores only adds switching overhead for CPU-bound jobs
+static int thread_count(int total) {
+  long cores = sysconf(_SC_NPROCESSORS_ONLN);
+  if (cores < 1) cores = 1;
+  return total < cores ? total : (int) cores;
+}
+
+static void run_pool(Pool* pool, int n_threads) {
+  atomic_init(&pool->next, 0);
+  if (mtx_init(&pool->print_lock, mtx_plain) != thrd_success) die("could not create a mutex");
+
+  if (n_threads == 1) {
+    worker(pool);  // nothing to share the work with: run it on the calling thread
+  } else {
+    thrd_t* threads = xmalloc((size_t) n_threads * sizeof(thrd_t));
+    for (int i = 0; i < n_threads; i++)
+      if (thrd_create(&threads[i], worker, pool) != thrd_success)
+        die("could not start a worker thread");
+    for (int i = 0; i < n_threads; i++) thrd_join(threads[i], NULL);
+    free(threads);
+  }
+
+  mtx_destroy(&pool->print_lock);
+}
+
 // --- Entry point ---
 
 void run_batch(const Batch* batch) {
@@ -110,14 +171,19 @@ void run_batch(const Batch* batch) {
     run_job(batch, 0, &results[0]);
     print_result(&results[0]);
   } else {
-    printf("Batch: %d run%s x %d replicate%s = %d jobs    Base seed: 0x%08x\n\n", batch->n_runs,
+    int n_threads = thread_count(total);
+
+    printf("Batch: %d run%s x %d replicate%s = %d jobs    Base seed: 0x%08x\n", batch->n_runs,
            batch->n_runs == 1 ? "" : "s", batch->replicates, batch->replicates == 1 ? "" : "s",
            total, batch->seed);
-    Printer p = printer_init(batch, results, done);
-    for (int j = 0; j < total; j++) {
-      run_job(batch, j, &results[j]);
-      job_finished(&p, j);
-    }
+    // The thread count depends on the machine, so it stays out of stdout
+    fflush(stdout);
+    fprintf(stderr, "Threads: %d\n", n_threads);
+    printf("\n");
+
+    Printer printer = printer_init(batch, results, done);
+    Pool    pool    = {.batch = batch, .results = results, .printer = &printer};
+    run_pool(&pool, n_threads);
   }
 
   free(done);

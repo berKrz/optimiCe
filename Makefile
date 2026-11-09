@@ -6,7 +6,7 @@ PKG_CONFIG ?= pkg-config
 TOML_CFLAGS := $(shell $(PKG_CONFIG) --cflags libtomlc17 2>/dev/null)
 TOML_LIBS   := $(shell $(PKG_CONFIG) --libs   libtomlc17 2>/dev/null || echo -ltomlc17)
 
-CFLAGS = -Wall -Wextra -std=c11 -I$(SRCDIR) -g -D_GNU_SOURCE -MMD -MP \
+CFLAGS = -Wall -Wextra -std=c11 -pthread -I$(SRCDIR) -g -D_GNU_SOURCE -MMD -MP \
          -finput-charset=UTF-8 -fexec-charset=UTF-8 $(TOML_CFLAGS)
 LDLIBS = -lm $(TOML_LIBS)
 

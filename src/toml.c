@@ -6,7 +6,7 @@
 #include "algorithms.h"
 #include "common.h"
 
-// Phase 1. Precedence is two independent chains, since [common] can't hold algorithm fields and
+// Precedence is two independent chains, since [common] can't hold algorithm fields and
 // [defaults.<algo>] can't hold runner fields:
 //   runner fields:    defaults -> [common]          -> [[run]]
 //   algorithm fields: defaults -> [defaults.<algo>] -> [[run]]

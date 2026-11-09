@@ -11,6 +11,7 @@ optimiCe runs optimization algorithms against a chosen benchmark fitness functio
 - Minimization or maximization
 - Iteration budget shared by every algorithm (`iterations`; generations, for GA), with two optional early stoppers: `target_fitness` ends the run once the current best is at least as good as the target, and `stagnation` ends it after that many consecutive iterations without improving the best-ever. The final result says when and why a run stopped early
 - Batches: several `[[run]]` sections in one file, each repeated `replicates` times, with shared settings in `[common]` and per-algorithm defaults in `[defaults.<algo>]` (see [Batches](#batches))
+- Parallel execution: a batch's jobs run on as many threads as there are CPU cores, with results and output identical to a sequential run
 - Reproducible runs: every job prints the seed it ran with, and that seed reruns it exactly. `seed` can be set in the configuration; when omitted, one is generated and printed
 - Configuration errors caught at startup, before anything runs, with messages pointing at the offending section, run, and key
 - Interactive step-through mode (`-i`) for inspecting a single run
@@ -139,7 +140,9 @@ A batch is every `[[run]]` repeated `replicates` times; each repetition of a run
 - **Precedence.** A runner field takes its value from `[[run]]`, else `[common]`, else its default. An algorithm field takes it from `[[run]]`, else `[defaults.<algo>]`, else its default.
 - **Seeds.** `seed` is the batch's base seed: replicate `r` runs with `seed + r` (wrapping around at 2³²), and that's true in every run. Replicate 3 of `pso-1` and replicate 3 of `ga-1` use the same seed, so every run faces the same sequence of seeds (common random numbers). Statistical tests that pair or block on replicates, like Friedman, match this design; tests that assume independent samples don't.
 - **Reproducing a job.** Every job prints its seed. Setting `seed` to it, `replicates = 1`, and keeping only that run reproduces the job exactly. Likewise, replicates 5 to 9 of a batch are `seed + 5` with `replicates = 5`.
-- **Output.** A single job prints a line per iteration and a full final result, as before. A batch with more than one job prints one line per job instead, with its label, replicate, seed, best fitness, and early stop if any. Lines come out in job order (every replicate of the first run, then the second, …), each as soon as it and all jobs before it have finished.
+- **Parallelism.** Jobs run on `min(jobs, CPU cores)` threads, each taking the next job as soon as it finishes one; there's no flag to set it. A job's result depends only on its seed, never on which thread ran it or when, so the output is identical whatever the core count.
+- **Output.** A single job prints a line per iteration and a full final result, as before. A batch with more than one job prints one line per job instead, with its label, replicate, seed, best fitness, and early stop if any. Lines come out in job order (every replicate of the first run, then the second, …), each as soon as it and all jobs before it have finished. The number of threads goes to stderr, so redirected output stays the same on every machine.
+- **Failures.** Every configuration check runs before the first job starts. A failure while jobs run (such as running out of memory) stops the whole batch with an error naming the job, e.g. `Error at 'pso-2, replicate 7': memory allocation failed`; lines already printed stay printed.
 - **`--interactive`** needs a single job: one `[[run]]` and `replicates = 1`.
 - **`--dump-config`** prints the base seed and `replicates` once, then each run's full resolved configuration, defaults included.
 

@@ -1,7 +1,9 @@
 #include <float.h>
 #include <math.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "algorithms.h"
 #include "common.h"
@@ -14,7 +16,17 @@ const char* enum_name(const EnumEntry* table, int value) {
 
 _Thread_local const char* g_where;
 
+// Several worker threads may fail at once, but exit() must only run once: the first caller
+// reports and exits, which ends every thread; any later caller blocks until that happens
+static atomic_flag exiting = ATOMIC_FLAG_INIT;
+
+static void claim_exit(void) {
+  if (atomic_flag_test_and_set(&exiting))
+    for (;;) pause();
+}
+
 void die(const char* msg) {
+  claim_exit();
   if (g_where) fprintf(stderr, "Error at '%s': %s\n", g_where, msg);
   else fprintf(stderr, "Error: %s\n", msg);
   fprintf(stderr, "Run with --help to see available options.\n");
@@ -22,6 +34,7 @@ void die(const char* msg) {
 }
 
 void die_at(const char* source, const char* key, const char* msg) {
+  claim_exit();
   if (key) fprintf(stderr, "Error at '%s' [%s]: %s\n", source, key, msg);
   else fprintf(stderr, "Error at '%s': %s\n", source, msg);
   fprintf(stderr, "Run with --help to see available options.\n");

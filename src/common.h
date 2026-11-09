@@ -52,7 +52,7 @@ typedef struct {
   void*  algo_cfg;   // cfg.algorithm->cfg_size bytes: the algorithm's cfg, post-validate
 } RunConfig;
 
-// Everything Phase 2 needs. Read-only once loaded, so threads can share it
+// Read-only once loaded, so threads can share it
 // Job j is run j / replicates, replicate j % replicates, seeded with seed + replicate (common
 // random numbers: replicate r gets the same seed in every run)
 typedef struct {
@@ -121,10 +121,10 @@ int      rng_next_bit(void);
 void validate(void);
 void dump_config(void);
 
-// toml.c - Phase 1: parses, merges and validates every [[run]]; the TOML tree is freed on return
+// toml.c - parses, merges and validates every [[run]]; the TOML tree is freed on return
 Batch load_batch(const char* filename);
 
-// batch.c - Phase 2
+// batch.c
 int  batch_jobs(const Batch* ex);    // runs x replicates
 void load_run(const RunConfig* rc);  // copies both config images into this thread's cfgs
 void run_batch(const Batch* ex);
