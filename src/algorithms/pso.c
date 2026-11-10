@@ -56,7 +56,7 @@ static const FieldSpec pso_fields[] = {
     {"gbest_update", FIELD_ENUM, SCOPE_ALGO, offsetof(PsoConfig, gbest_update), gbest_update_table,
      "async", "gbest update: async | sync"},
     {"bounds", FIELD_ENUM, SCOPE_ALGO, offsetof(PsoConfig, bounds), bounds_table, "clamp",
-     "Out-of-domain handling: clamp | reflect | random"},
+     "Out-of-domain handling: clamp | reflect | random | none"},
     {NULL, 0, 0, 0, NULL, NULL, NULL},
 };
 
@@ -73,6 +73,7 @@ static void pso_validate(void) {
   if (cfg.v_max < 0.0) die("v_max must be non-negative (0 disables the cap)");
   if (cfg.c1 < 0.0) die("c1 must be non-negative");
   if (cfg.c2 < 0.0) die("c2 must be non-negative");
+  check_bounds_mode(cfg.bounds);
 }
 
 // --- Dump ---

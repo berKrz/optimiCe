@@ -24,7 +24,7 @@ optimiCe runs optimization algorithms against a chosen benchmark fitness functio
 - Optional linear inertia decay: `w` applies at the first iteration and `w_end` at the last, interpolated in between (Shi & Eberhart's `0.9 → 0.4` is the classic setting). Leaving `w_end` unset keeps the inertia constant
 - Optional velocity clamping (`v_max`): each velocity component is capped at `v_max × (domain_max − domain_min)`
 - Asynchronous or synchronous gbest update (`gbest_update`): `async` moves gbest within the iteration as soon as any particle improves it, `sync` refreshes it once after the whole swarm has moved
-- Configurable boundary handling (`bounds`): `clamp` pins a particle to the bound and zeroes its velocity on that dimension (the default), `reflect` mirrors it back inside and reverses that velocity component, `random` redraws that coordinate uniformly and zeroes its velocity
+- Configurable boundary handling (`bounds`): `clamp` pins a particle to the bound and zeroes its velocity on that dimension (the default), `reflect` mirrors it back inside and reverses that velocity component, `random` redraws that coordinate uniformly and zeroes its velocity, `none` lets the particle leave the domain (only for fitness functions without domain bounds)
 - Configurable inertia (`w`), cognitive coefficient (`c1`), and social coefficient (`c2`)
 - `pbest` initialization by particle position, or by independent random draw
 
@@ -49,7 +49,7 @@ optimiCe runs optimization algorithms against a chosen benchmark fitness functio
 - Three-branch position update per slime: with probability `z`, full uniform re-init; otherwise, per-dimension, probability `tanh|fᵢ − DF|` of exploiting around the best-ever using two random peers and amplitude `a = atanh(1 − t/T)`; else contract with amplitude `b = 1 − t/T`
 - Decay: both `a` and `b` shrink to zero as `t → T`, trading exploration for exploitation across the run
 - Opportunistic best-ever update within the iteration (mirrors PSO's async gbest — later slimes see the fresh best)
-- Configurable boundary handling (`bounds`): `clamp` pins a coordinate to the bound (the default), `reflect` mirrors it back inside, `random` redraws it uniformly
+- Configurable boundary handling (`bounds`): `clamp` pins a coordinate to the bound (the default), `reflect` mirrors it back inside, `random` redraws it uniformly, `none` lets the slime leave the domain (only for fitness functions without domain bounds)
 
 ## Build
 
@@ -229,8 +229,8 @@ Fields that belong to the runner rather than to any algorithm.
 | `iterations`     | int    | `100`      | Iteration budget, the hard cap on every run (generations, for GA)                                            |
 | `target_fitness` | float  | unset      | Stop early once the current best is at least as good as this value                                           |
 | `stagnation`     | int    | `0`        | Stop early after this many consecutive iterations without improving the best-ever; `0` disables it           |
-| `domain_min`     | float  | `-5.0`     | Lower bound of each dimension                                                                                |
-| `domain_max`     | float  | `5.0`      | Upper bound of each dimension                                                                                |
+| `domain_min`     | float  | `-5.0`     | Lower bound of each dimension; with `bounds = "none"`, of the initialization range only                      |
+| `domain_max`     | float  | `5.0`      | Upper bound of each dimension; with `bounds = "none"`, of the initialization range only                      |
 | `fitness`        | name   | `sphere`   | One of the eight benchmark functions listed above. Some have fixed `n_dims` or stricter domain bounds, enforced at startup |
 | `algorithm`      | name   | required   | `pso`, `ga` or `sma`. `[[run]]` only                                                                         |
 
@@ -246,7 +246,7 @@ Fields that belong to the runner rather than to any algorithm.
 | `c2`           | float | `2.0`           | Social coefficient                                                                       |
 | `pbest_init`   | enum  | `position`      | `position` (pbest starts at the initial position) or `random` (independent random point) |
 | `gbest_update` | enum  | `async`         | `async` (gbest moves as soon as a particle improves it) or `sync` (once per iteration)   |
-| `bounds`       | enum  | `clamp`         | Out-of-domain handling: `clamp`, `reflect` or `random`. Reflection bounces as many times as needed for coordinates that overshoot by more than the domain width |
+| `bounds`       | enum  | `clamp`         | Out-of-domain handling: `clamp`, `reflect`, `random` or `none`. Reflection bounces as many times as needed for coordinates that overshoot by more than the domain width |
 
 ### GA fields
 
@@ -264,11 +264,11 @@ Fields that belong to the runner rather than to any algorithm.
 
 ### SMA fields
 
-| Key        | Type  | Default | Description                                            |
-|------------|-------|---------|--------------------------------------------------------|
-| `pop_size` | int   | `30`    | Population size                                        |
-| `z`        | float | `0.03`  | Full re-init probability per slime, in `[0.0, 1.0]`    |
-| `bounds`   | enum  | `clamp` | Out-of-domain handling: `clamp`, `reflect` or `random` |
+| Key        | Type  | Default | Description                                                    |
+|------------|-------|---------|----------------------------------------------------------------|
+| `pop_size` | int   | `30`    | Population size                                                |
+| `z`        | float | `0.03`  | Full re-init probability per slime, in `[0.0, 1.0]`            |
+| `bounds`   | enum  | `clamp` | Out-of-domain handling: `clamp`, `reflect`, `random` or `none` |
 
 ## Dev environment
 

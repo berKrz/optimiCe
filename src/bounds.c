@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdio.h>
 
 #include "algorithms.h"
 #include "common.h"
@@ -10,6 +11,7 @@ const EnumEntry bounds_table[] = {
     {"clamp",   BOUNDS_CLAMP  },
     {"reflect", BOUNDS_REFLECT},
     {"random",  BOUNDS_RANDOM },
+    {"none",    BOUNDS_NONE   },
     {NULL,      0             },
 };
 
@@ -29,10 +31,12 @@ static int reflect(double* x, double lo, double hi) {
 }
 
 void apply_bounds(double* x, double* v, BoundsMode mode) {
+  if (mode == BOUNDS_NONE && isfinite(*x)) return;
+
   double lo = g_cfg.domain_min, hi = g_cfg.domain_max;
   if (*x >= lo && *x <= hi) return;
 
-  // A non-finite coordinate has no meaningful reflection or bounce count; pin it
+  // A non-finite coordinate has no meaningful reflection or bounce count; pin it, under none too
   if (!isfinite(*x)) mode = BOUNDS_CLAMP;
 
   switch (mode) {
@@ -47,5 +51,17 @@ void apply_bounds(double* x, double* v, BoundsMode mode) {
       *x = rng_next_double_range(lo, hi);
       if (v) *v = 0.0;
       return;
+    case BOUNDS_NONE:  // unreachable: finite coordinates returned above, non-finite ones clamp
+      return;
   }
+}
+
+void check_bounds_mode(BoundsMode mode) {
+  const FitnessEntry* fe = g_cfg.fitness;
+  if (mode != BOUNDS_NONE || (isinf(fe->domain_lo) && isinf(fe->domain_hi))) return;
+  char msg[160];
+  snprintf(msg, sizeof(msg),
+           "bounds = none needs an unbounded domain, but %s is defined on [%g, %g]", fe->name,
+           fe->domain_lo, fe->domain_hi);
+  die(msg);
 }

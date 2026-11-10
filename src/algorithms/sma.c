@@ -26,7 +26,7 @@ static const FieldSpec sma_fields[] = {
     {"z", FIELD_DOUBLE, SCOPE_ALGO, offsetof(SmaConfig, z), NULL, "0.03",
      "Full re-init probability (per slime)"},
     {"bounds", FIELD_ENUM, SCOPE_ALGO, offsetof(SmaConfig, bounds), bounds_table, "clamp",
-     "Out-of-domain handling: clamp | reflect | random"},
+     "Out-of-domain handling: clamp | reflect | random | none"},
     {NULL, 0, 0, 0, NULL, NULL, NULL},
 };
 
@@ -37,6 +37,7 @@ static void* sma_cfg_base(void) { return &cfg; }
 static void sma_validate(void) {
   if (cfg.pop_size <= 0) die("pop_size must be positive");
   if (cfg.z < 0.0 || cfg.z > 1.0) die("z must be in [0.0, 1.0]");
+  check_bounds_mode(cfg.bounds);
 }
 
 // --- Dump ---
