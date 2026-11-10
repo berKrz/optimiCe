@@ -13,7 +13,7 @@ typedef enum {
   FIELD_DOUBLE,
   FIELD_BOOL,
   FIELD_ENUM,
-  FIELD_FN,
+  FIELD_FITNESS,
   FIELD_ALGORITHM,
   FIELD_DOUBLE_LIST,  // TOML array of numbers, stored as a DoubleList
 } FieldType;
@@ -44,7 +44,7 @@ enum {
 };
 
 // Pure data row. Walker reads `type` to decide how to parse a datum, consults
-// `lookup` for FIELD_ENUM / FIELD_FN, writes the result through
+// `lookup` for FIELD_ENUM, writes the result through
 // `base + offset`, where `base` is &g_cfg for runner_fields and the algorithm's cfg_base() for its
 // own fields
 typedef struct FieldSpec {
@@ -52,7 +52,7 @@ typedef struct FieldSpec {
   FieldType   type;
   unsigned    scope;            // OR of the Sections this field may appear in
   size_t      offset;           // relative to the table's base
-  const void* lookup;           // FIELD_ENUM / FIELD_FN table, NULL otherwise
+  const void* lookup;           // FIELD_ENUM table, NULL otherwise
   const char* default_display;  // parsed back through the walker in the defaults pass
   const char* description;
 } FieldSpec;

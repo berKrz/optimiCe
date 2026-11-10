@@ -8,21 +8,23 @@ static _Thread_local uint64_t count;
 
 double evaluate(const double* pos) {
   count++;
-  return g_cfg.fitness_fn(pos);
+  return g_cfg.fitness->fn(pos);
 }
 
 void     evaluations_reset(void) { count = 0; }
 uint64_t evaluations(void) { return count; }
 
 // --- Functions ---
+//
+// Static: the catalog below is the only way to them, and evaluate is their only caller
 
-double sphere(const double* pos) {
+static double sphere(const double* pos) {
   double sum = 0.0;
   for (int i = 0; i < g_cfg.n_dims; i++) sum += pos[i] * pos[i];
   return sum;
 }
 
-double rosenbrock(const double* pos) {
+static double rosenbrock(const double* pos) {
   double sum = 0.0;
   for (int i = 0; i < g_cfg.n_dims - 1; i++) {
     double t1  = pos[i + 1] - pos[i] * pos[i];
@@ -32,13 +34,13 @@ double rosenbrock(const double* pos) {
   return sum;
 }
 
-double rastrigin(const double* pos) {
+static double rastrigin(const double* pos) {
   double a = 10.0, sum = a * g_cfg.n_dims;
   for (int i = 0; i < g_cfg.n_dims; i++) sum += pos[i] * pos[i] - a * cos(2.0 * M_PI * pos[i]);
   return sum;
 }
 
-double griewank(const double* pos) {
+static double griewank(const double* pos) {
   double sum = 0.0, product = 1.0;
   for (int i = 0; i < g_cfg.n_dims; i++) {
     sum     += pos[i] * pos[i];
@@ -47,7 +49,7 @@ double griewank(const double* pos) {
   return 1.0 + sum / 4000.0 - product;
 }
 
-double ackley(const double* pos) {
+static double ackley(const double* pos) {
   const double a = 20.0, b = 0.2, c = 2.0 * M_PI;
   double       sum_sq = 0.0, sum_cos = 0.0;
   for (int i = 0; i < g_cfg.n_dims; i++) {
@@ -57,26 +59,26 @@ double ackley(const double* pos) {
   return -a * exp(-b * sqrt(sum_sq / g_cfg.n_dims)) - exp(sum_cos / g_cfg.n_dims) + a + exp(1.0);
 }
 
-double eggholder(const double* pos) {
+static double eggholder(const double* pos) {
   double x = pos[0], y = pos[1];
   return -(y + 47.0) * sin(sqrt(fabs(x / 2.0 + (y + 47.0)))) - x * sin(sqrt(fabs(x - (y + 47.0))));
 }
 
-double schwefel(const double* pos) {
+static double schwefel(const double* pos) {
   const double a   = 418.9828872724338;
   double       sum = 0.0;
   for (int i = 0; i < g_cfg.n_dims; i++) sum += -pos[i] * sin(sqrt(fabs(pos[i])));
   return a * g_cfg.n_dims + sum;
 }
 
-double schaffer_f6(const double* pos) {
+static double schaffer_f6(const double* pos) {
   double x = pos[0], y = pos[1], r1 = x * x + y * y, r2 = 1.0 + 0.001 * r1;
   return 0.5 + (sin(sqrt(r1)) * sin(sqrt(r1)) - 0.5) / (r2 * r2);
 }
 
 // Catalog of available fitness functions, by config name. NULL-terminated
-// Read by config.c's "fitness" handler to resolve a string to a function pointer,
-// and by validate() to enforce per-function preconditions on g_cfg.
+// config.c's "fitness" handler resolves a name to its entry, which g_cfg.fitness then points at;
+// validate() enforces the entry's preconditions on g_cfg, and dump_config() prints its name.
 //
 // n_dims_min & n_dims_max: 0 means unbounded on that side.
 // domain_lo & domain_hi:   -/+INFINITY mean unbounded on that side.

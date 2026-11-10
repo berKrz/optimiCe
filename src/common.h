@@ -4,8 +4,9 @@
 #include <stdint.h>
 #include <stdnoreturn.h>
 
-typedef struct Algorithm Algorithm;  // defined in algorithms.h
-typedef struct FieldSpec FieldSpec;  // defined in algorithms.h
+typedef struct Algorithm    Algorithm;     // defined in algorithms.h
+typedef struct FieldSpec    FieldSpec;     // defined in algorithms.h
+typedef struct FitnessEntry FitnessEntry;  // defined below, with fitness.c
 
 typedef enum { MINIMIZE, MAXIMIZE } OptDirection;
 
@@ -23,9 +24,8 @@ typedef struct {
   double       target_fitness;  // early stop once the current best reaches it; NaN = off
   int          stagnation;      // early stop after this many iterations without improving; 0 = off
 
-  double (*fitness_fn)(const double* pos);
-
-  const Algorithm* algorithm;
+  const FitnessEntry* fitness;  // catalog entry; only evaluate calls its function
+  const Algorithm*    algorithm;
 } Config;
 
 extern _Thread_local Config g_cfg;
@@ -137,7 +137,7 @@ void free_batch(Batch* ex);
 Batch parse_args(int argc, char** argv);
 
 // fitness.c
-// evaluate is the only way an algorithm calls the fitness function: it calls g_cfg.fitness_fn
+// evaluate is the only way an algorithm calls the fitness function: it calls g_cfg.fitness->fn
 // and counts the call on this thread. Every call counts, so the count is the run's cost only if
 // algorithms never re-evaluate a solution whose fitness they already know, and never evaluate to
 // print (otherwise --interactive would change it)
@@ -145,16 +145,8 @@ double   evaluate(const double* pos);
 void     evaluations_reset(void);
 uint64_t evaluations(void);
 
-double sphere(const double* pos);
-double rosenbrock(const double* pos);
-double rastrigin(const double* pos);
-double griewank(const double* pos);
-double ackley(const double* pos);
-double eggholder(const double* pos);
-double schwefel(const double* pos);
-double schaffer_f6(const double* pos);
-
-typedef struct FitnessEntry {
+// The functions themselves are private to fitness.c; the catalog is the only way to them
+struct FitnessEntry {
   const char* name;
   double (*fn)(const double*);
   // n_dims_min == n_dims_max for fixed dimension functions
@@ -162,6 +154,6 @@ typedef struct FitnessEntry {
   int    n_dims_max;  // 0 = unbounded above
   double domain_lo;   // -INFINITY = unbounded below
   double domain_hi;   //  INFINITY = unbounded above
-} FitnessEntry;
+};
 
 extern const FitnessEntry fitness_table[];

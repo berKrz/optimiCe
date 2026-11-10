@@ -20,14 +20,6 @@ static const EnumEntry direction_table[] = {
     {NULL,       0       },
 };
 
-// --- Reverse lookups (cold path: validate() and dump_config()) ---
-
-static const FitnessEntry* get_fitness_entry(double (*fn)(const double*)) {
-  for (int i = 0; fitness_table[i].name; i++)
-    if (fitness_table[i].fn == fn) return &fitness_table[i];
-  return NULL;  // set_field guarantees a match; unreachable
-}
-
 // --- Algorithm lookup ---
 
 int find_algorithm(const char* name) {
@@ -77,14 +69,13 @@ static void set_field(const char* source, const FieldSpec* row, void* base, toml
       }
       die_at(source, row->name, "unrecognized value");
     }
-    case FIELD_FN: {
-      // fitness_table is the only FIELD_FN consumer in the project
+    case FIELD_FITNESS: {
+      // Stores the catalog entry itself, the way FIELD_ALGORITHM stores the algorithm
+      // fitness_table is the only catalog, so the row's lookup is unused
       if (d.type != TOML_STRING) die_at(source, row->name, "expected string");
       for (int i = 0; fitness_table[i].name; i++) {
         if (strcmp(fitness_table[i].name, d.u.s) == 0) {
-          // memcpy to avoid writing a function pointer through a differently-typed pointer
-          double (*fn)(const double*) = fitness_table[i].fn;
-          memcpy(target, &fn, sizeof(fn));
+          *(const FitnessEntry**) target = &fitness_table[i];
           return;
         }
       }
@@ -148,7 +139,7 @@ static toml_datum_t default_as_datum(const FieldSpec* row) {
       return d;
     }
     case FIELD_ENUM:
-    case FIELD_FN:   {
+    case FIELD_FITNESS: {
       d.type = TOML_STRING;
       // default_display is a string literal; set_field only reads .u.s,
       // and the synthesized datum never reaches tomlc17's free path
@@ -287,7 +278,7 @@ const FieldSpec runner_fields[] = {
      "Lower bound of the domain"},
     {"domain_max", FIELD_DOUBLE, SCOPE_GLOBAL, offsetof(Config, domain_max), NULL, "5.0",
      "Upper bound of the domain"},
-    {"fitness", FIELD_FN, SCOPE_GLOBAL, offsetof(Config, fitness_fn), NULL, "sphere",
+    {"fitness", FIELD_FITNESS, SCOPE_GLOBAL, offsetof(Config, fitness), NULL, "sphere",
      "Fitness function"},
     {"algorithm", FIELD_ALGORITHM, SECTION_RUN, 0, NULL, NULL, "Algorithm to run: pso | ga | sma"},
     {NULL, 0, 0, 0, NULL, NULL, NULL},
@@ -302,7 +293,7 @@ static const char* type_label(FieldType t) {
     case FIELD_DOUBLE:      return "float";
     case FIELD_BOOL:        return "bool";
     case FIELD_ENUM:        return "enum";
-    case FIELD_FN:          return "name";
+    case FIELD_FITNESS:     return "name";
     case FIELD_ALGORITHM:   return "name";
     case FIELD_DOUBLE_LIST: return "float[]";
   }
@@ -334,9 +325,8 @@ void validate(void) {
   if (g_cfg.iterations < 1) die("iterations must be positive");
   if (g_cfg.stagnation < 0) die("stagnation must be non-negative (0 disables it)");
 
-  const FitnessEntry* fe = get_fitness_entry(g_cfg.fitness_fn);
-  if (!fe) die("fitness function not found in catalog");
-  char msg[256];
+  const FitnessEntry* fe = g_cfg.fitness;  // set_field resolved it, or the default did
+  char                msg[256];
 
   if (fe->n_dims_min && g_cfg.n_dims < fe->n_dims_min) {
     snprintf(msg, sizeof(msg), "for %s, n_dims must be at least %d (current: %d)", fe->name,
@@ -362,7 +352,7 @@ void validate(void) {
 // One run's resolved config, as loaded into g_cfg and the algorithm's cfg; seed and replicates are
 // batch-wide, so dump_batch prints them once
 void dump_config(void) {
-  const FitnessEntry* fe = get_fitness_entry(g_cfg.fitness_fn);
+  const FitnessEntry* fe = g_cfg.fitness;
 
   printf("algorithm      = %s\n", g_cfg.algorithm ? g_cfg.algorithm->name : "(unset)");
   printf("direction      = %s\n", enum_name(direction_table, g_cfg.direction));
