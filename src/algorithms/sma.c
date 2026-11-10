@@ -104,7 +104,7 @@ static void sma_run(RunResult* out) {
   for (int i = 0; i < cfg.pop_size; i++) {
     for (int d = 0; d < g_cfg.n_dims; d++)
       positions[i * g_cfg.n_dims + d] = rng_next_double_range(g_cfg.domain_min, g_cfg.domain_max);
-    fits[i] = g_cfg.fitness_fn(positions + i * g_cfg.n_dims);
+    fits[i] = evaluate(positions + i * g_cfg.n_dims);
   }
 
   // DF / Xb track best-ever
@@ -189,7 +189,7 @@ static void sma_run(RunResult* out) {
       for (int d = 0; d < g_cfg.n_dims; d++)
         apply_bounds(&positions[i * g_cfg.n_dims + d], NULL, cfg.bounds);
 
-      fits[i] = g_cfg.fitness_fn(positions + i * g_cfg.n_dims);
+      fits[i] = evaluate(positions + i * g_cfg.n_dims);
 
       // Opportunistic DF update within the iteration: later slimes see the fresh Xb
       // Matches PSO's async gbest

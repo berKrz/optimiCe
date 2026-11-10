@@ -100,6 +100,8 @@ typedef struct {
   double    fitness;
   double*   pos;
   StopState stop;
+  int       iterations;   // iterations the run completed, early stop or not; set by the runner
+  uint64_t  evaluations;  // fitness evaluations the run made (see evaluate); set by the runner
 } RunResult;
 
 // Footer of a run; mentions an early stop when the result records one
@@ -135,6 +137,14 @@ void free_batch(Batch* ex);
 Batch parse_args(int argc, char** argv);
 
 // fitness.c
+// evaluate is the only way an algorithm calls the fitness function: it calls g_cfg.fitness_fn
+// and counts the call on this thread. Every call counts, so the count is the run's cost only if
+// algorithms never re-evaluate a solution whose fitness they already know, and never evaluate to
+// print (otherwise --interactive would change it)
+double   evaluate(const double* pos);
+void     evaluations_reset(void);
+uint64_t evaluations(void);
+
 double sphere(const double* pos);
 double rosenbrock(const double* pos);
 double rastrigin(const double* pos);

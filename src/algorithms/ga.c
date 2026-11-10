@@ -198,13 +198,13 @@ static void decode_linear(const uint64_t* ind, double* pos) {
 
 // Decodes `ind` into `tmp` and returns its fitness
 // `tmp` must be at least n_dims doubles; its contents are overwritten
-// The GA's only call to the fitness function - every individual's fitness is cached in `fit`, next
-// to the population, and this runs once per individual, when it's created: at init, and after
-// crossover and mutation, everything else (selection, elitism, the progress line, the result, the
+// The GA's only call to evaluate - every individual's fitness is cached in `fit`, next to the
+// population, and this runs once per individual, when it's created: at init, and after crossover
+// and mutation, everything else (selection, elitism, the progress line, the result, the
 // interactive printers) reads the cache
 static double eval(const uint64_t* ind, double* tmp) {
   decode_linear(ind, tmp);
-  return g_cfg.fitness_fn(tmp);
+  return evaluate(tmp);
 }
 
 // Index of the population's current best individual, from the cached fitness

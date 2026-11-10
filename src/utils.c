@@ -1,4 +1,5 @@
 #include <float.h>
+#include <inttypes.h>
 #include <math.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -132,6 +133,8 @@ void print_result(const RunResult* r) {
     printf("Stopped early at iteration %d: no improvement for %d iterations\n\n", r->stop.iteration,
            g_cfg.stagnation);
 
+  printf("Iterations: %d\n", r->iterations);
+  printf("Evaluations: %" PRIu64 "\n", r->evaluations);
   printf("Algorithm: %s    Seed: 0x%08x\n", g_cfg.algorithm->name, g_cfg.seed);
   for (int i = 0; i < LINE_WIDTH; i++) printf("=");
   printf("\n");

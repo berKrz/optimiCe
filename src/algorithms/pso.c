@@ -128,7 +128,7 @@ static void init_swarm(Particle* swarm, double* data, double* gbest_pos, double*
       swarm[i].vel[d] = 0.0;
     }
 
-    swarm[i].fitness = g_cfg.fitness_fn(swarm[i].pos);
+    swarm[i].fitness = evaluate(swarm[i].pos);
 
     if (cfg.pbest_init == PBEST_POSITION) {
       copy_pos(swarm[i].pbest, swarm[i].pos);
@@ -136,7 +136,7 @@ static void init_swarm(Particle* swarm, double* data, double* gbest_pos, double*
     } else {
       for (int d = 0; d < g_cfg.n_dims; d++)
         swarm[i].pbest[d] = rng_next_double_range(g_cfg.domain_min, g_cfg.domain_max);
-      swarm[i].pbest_fitness = g_cfg.fitness_fn(swarm[i].pbest);
+      swarm[i].pbest_fitness = evaluate(swarm[i].pbest);
     }
 
     if (is_better(swarm[i].pbest_fitness, *gbest_fitness)) {
@@ -183,7 +183,7 @@ static void update_swarm(Particle* swarm, double* gbest_pos, double* gbest_fitne
       apply_bounds(&swarm[i].pos[d], &swarm[i].vel[d], cfg.bounds);
     }
 
-    swarm[i].fitness = g_cfg.fitness_fn(swarm[i].pos);
+    swarm[i].fitness = evaluate(swarm[i].pos);
 
     if (is_better(swarm[i].fitness, swarm[i].pbest_fitness)) {
       swarm[i].pbest_fitness = swarm[i].fitness;

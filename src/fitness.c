@@ -1,7 +1,20 @@
 #include <math.h>
-#include <stdio.h>
 
 #include "common.h"
+
+// --- Counted evaluation ---
+
+static _Thread_local uint64_t count;
+
+double evaluate(const double* pos) {
+  count++;
+  return g_cfg.fitness_fn(pos);
+}
+
+void     evaluations_reset(void) { count = 0; }
+uint64_t evaluations(void) { return count; }
+
+// --- Functions ---
 
 double sphere(const double* pos) {
   double sum = 0.0;

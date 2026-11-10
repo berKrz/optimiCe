@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,8 +36,12 @@ static void run_job(const Batch* batch, int j, RunResult* out) {
   g_cfg.seed = job_seed(batch, r);
   g_where    = where;
   rng_init(g_cfg.seed);
+  evaluations_reset();
   rc->cfg.algorithm->run(out);
-  g_where = NULL;
+  // stop.iteration is the 0-based index the run stopped at, so it completed one more than that
+  out->iterations  = out->stop.reason != STOP_NONE ? out->stop.iteration + 1 : g_cfg.iterations;
+  out->evaluations = evaluations();
+  g_where          = NULL;
 }
 
 // --- Multi-job output ---
@@ -48,6 +53,7 @@ typedef struct {
   int              cursor;  // next job to print
   int              label_w;
   int              rep_w;
+  int              iter_w;  // digits of the largest iteration budget in the batch
 } Printer;
 
 static int digits(int n) {
@@ -62,6 +68,8 @@ static Printer printer_init(const Batch* batch, const RunResult* results, char* 
   for (int k = 0; k < batch->n_runs; k++) {
     int w = (int) strlen(batch->runs[k].label);
     if (w > p.label_w) p.label_w = w;
+    w = digits(batch->runs[k].cfg.iterations);
+    if (w > p.iter_w) p.iter_w = w;
   }
   return p;
 }
@@ -71,14 +79,16 @@ static void print_job_line(const Printer* p, int j) {
   const RunResult* res = &p->results[j];
   int              r   = j % p->batch->replicates;
 
-  char best[40];
+  char best[40], evals[32];
   snprintf(best, sizeof(best), "best = %g", res->fitness);
+  snprintf(evals, sizeof(evals), "evals %" PRIu64, res->evaluations);
 
-  printf("%-*s  r%-*d  seed 0x%08x  ", p->label_w, rc->label, p->rep_w, r, job_seed(p->batch, r));
+  printf("%-*s  r%-*d  seed 0x%08x  %-19s  iters %-*d  ", p->label_w, rc->label, p->rep_w, r,
+         job_seed(p->batch, r), best, p->iter_w, res->iterations);
   switch (res->stop.reason) {
-    case STOP_NONE:       printf("%s\n", best); break;
-    case STOP_TARGET:     printf("%-19s  target @ %d\n", best, res->stop.iteration); break;
-    case STOP_STAGNATION: printf("%-19s  stagnation @ %d\n", best, res->stop.iteration); break;
+    case STOP_NONE:       printf("%s\n", evals); break;
+    case STOP_TARGET:     printf("%-16s  target @ %d\n", evals, res->stop.iteration); break;
+    case STOP_STAGNATION: printf("%-16s  stagnation @ %d\n", evals, res->stop.iteration); break;
   }
 }
 
