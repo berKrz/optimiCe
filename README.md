@@ -38,7 +38,7 @@ optimiCe runs optimization algorithms against a chosen benchmark fitness functio
 - Two crossover operators:
   - `n_point`: dimension-aware n-point crossover. `cut_points` lists the cut ratios, and they apply independently within each dimension's slice. Every cut must actually split the slice: ratios landing on bit 0, or two ratios landing on the same bit, are rejected because they'd silently yield fewer cuts than listed. Segments between cuts alternate keep / swap, starting with keep, so `[0.6]` is classic single-point and `[0.3, 0.7]` is two-point
   - `uniform`: every bit is exchanged independently with probability 0.5
-- Optional family-competition elitism (`elitism = "family"`): after crossover and mutation, each pair keeps the best two of its two parents and two children (children win ties). An unpaired last individual keeps the better of itself and its mutant. Costs two extra fitness evaluations per pair, since parent fitness is reused from selection
+- Optional family-competition elitism (`elitism = "family"`): after crossover and mutation, each pair keeps the best two of its two parents and two children (children win ties). An unpaired last individual keeps the better of itself and its mutant. Costs no extra fitness evaluations: every child is evaluated once either way, and the parents' fitness is already known
 - Per-bit mutation at a configurable rate
 - `ind_size` capped at 63 so the per-dimension decode fits in a single `uint64_t`
 

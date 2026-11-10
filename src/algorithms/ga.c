@@ -198,24 +198,21 @@ static void decode_linear(const uint64_t* ind, double* pos) {
 
 // Decodes `ind` into `tmp` and returns its fitness
 // `tmp` must be at least n_dims doubles; its contents are overwritten
+// The GA's only call to the fitness function - every individual's fitness is cached in `fit`, next
+// to the population, and this runs once per individual, when it's created: at init, and after
+// crossover and mutation, everything else (selection, elitism, the progress line, the result, the
+// interactive printers) reads the cache
 static double eval(const uint64_t* ind, double* tmp) {
   decode_linear(ind, tmp);
   return g_cfg.fitness_fn(tmp);
 }
 
-// Scans the population and returns the index of its current best individual
-// Caller provides `tmp` (n_dims doubles) as the decode scratch buffer
-static int find_best(const uint64_t* pop, double* tmp) {
-  int    words    = words_per_ind();
-  int    best_idx = 0;
-  double best_fit = eval(pop, tmp);
-  for (int i = 1; i < cfg.pop_size; i++) {
-    double f = eval(pop + i * words, tmp);
-    if (is_better(f, best_fit)) {
-      best_fit = f;
-      best_idx = i;
-    }
-  }
+// Index of the population's current best individual, from the cached fitness
+// Strict comparison, so ties go to the lowest index
+static int find_best(const double* fit) {
+  int best_idx = 0;
+  for (int i = 1; i < cfg.pop_size; i++)
+    if (is_better(fit[i], fit[best_idx])) best_idx = i;
   return best_idx;
 }
 
@@ -278,8 +275,8 @@ static void mutation(uint64_t* ind, int index) {
 
 // Scratch buffers whose size is fixed for the whole run, allocated once in ga_run instead of per
 // generation
-// Selection reads the population into `aux` and `fits`, wheel selections fill `weights` (and
-// `order` for rank), and `tmp` is the decode scratch for anything that evaluates an individual
+// Selection copies the population and its fitness into `aux` and `fits`, wheel selections fill
+// `weights` (and `order` for rank), and `tmp` is the decode scratch
 typedef struct {
   double fit;
   int    idx;
@@ -408,15 +405,20 @@ static void spin(uint64_t* pop, GaWork* work, int n, int words) {
   }
 }
 
-// Copies the population into work->aux and evaluates it into work->fits
-static void snapshot(const uint64_t* pop, GaWork* work) {
+// Copies the population into work->aux and its fitness into work->fits
+static void snapshot(const uint64_t* pop, const double* fit, GaWork* work) {
   int words = words_per_ind();
   memcpy(work->aux, pop, (size_t) cfg.pop_size * words * sizeof(uint64_t));
-  for (int i = 0; i < cfg.pop_size; i++) work->fits[i] = eval(pop + i * words, work->tmp);
+  memcpy(work->fits, fit, (size_t) cfg.pop_size * sizeof(double));
 }
 
-static void selection_wheel(uint64_t* pop, GaWork* work) {
-  snapshot(pop, work);
+// After a selection: slot i holds a copy of aux[picked[i]], so it carries that entry's fitness
+static void carry_fitness(double* fit, const GaWork* work) {
+  for (int i = 0; i < cfg.pop_size; i++) fit[i] = work->fits[work->picked[i]];
+}
+
+static void selection_wheel(uint64_t* pop, double* fit, GaWork* work) {
+  snapshot(pop, fit, work);
 
   switch (cfg.selection) {
     case ROULETTE:
@@ -435,13 +437,14 @@ static void selection_wheel(uint64_t* pop, GaWork* work) {
   }
 
   spin(pop, work, cfg.pop_size, words_per_ind());
+  carry_fitness(fit, work);
 }
 
-static void selection_tournament(uint64_t* pop, GaWork* work) {
+static void selection_tournament(uint64_t* pop, double* fit, GaWork* work) {
   int words = words_per_ind();
 
   if (g_opts.interactive) printf("Selection: Tournament\n\n");
-  snapshot(pop, work);
+  snapshot(pop, fit, work);
 
   for (int i = 0; i < cfg.pop_size; i++) {
     int winner = rng_next_int(0, cfg.pop_size);
@@ -452,6 +455,7 @@ static void selection_tournament(uint64_t* pop, GaWork* work) {
     memcpy(pop + i * words, work->aux + winner * words, words * sizeof(uint64_t));
     work->picked[i] = winner;
   }
+  carry_fitness(fit, work);
 }
 
 // --- Reproduction step ---
@@ -476,10 +480,11 @@ static int best_of(const double* fits, int n, int exclude) {
 
 // Family competition (elitist recombination): slots `a` and `b` hold the two children, already
 // crossed and mutated, and work->family[0..1] holds copies of their parents
-// The best two of the four survive into the slots
+// The best two of the four survive into the slots, and their fitness into `fa` / `fb`
+// `fa` / `fb` hold the parents' fitness on entry
 // Children are listed first, so they win ties against parents, letting the search drift across
 // plateaus instead of freezing on the incumbent
-static void family_compete(uint64_t* a, uint64_t* b, double fit_pa, double fit_pb, int pair,
+static void family_compete(uint64_t* a, uint64_t* b, double* fa, double* fb, int pair,
                            GaWork* work) {
   int       words  = words_per_ind();
   uint64_t* family = work->family;
@@ -489,23 +494,28 @@ static void family_compete(uint64_t* a, uint64_t* b, double fit_pa, double fit_p
   // Candidate order: child a, child b, parent a, parent b
   const int   src[4]   = {2, 3, 0, 1};
   const char* label[4] = {"child 1", "child 2", "parent 1", "parent 2"};
-  double      fits[4]  = {eval(a, work->tmp), eval(b, work->tmp), fit_pa, fit_pb};
+  double      fits[4]  = {eval(a, work->tmp), eval(b, work->tmp), *fa, *fb};
   int         first    = best_of(fits, 4, -1);
   int         second   = best_of(fits, 4, first);
 
   memcpy(a, family + src[first] * words, words * sizeof(uint64_t));
   memcpy(b, family + src[second] * words, words * sizeof(uint64_t));
+  *fa = fits[first];
+  *fb = fits[second];
   if (g_opts.interactive)
     printf("  Family %d: kept %s and %s\n", pair, label[first], label[second]);
 }
 
 // Unpaired individual under family elitism: the mutant replaces its parent unless it's worse
-static void family_compete_single(uint64_t* a, double fit_pa, int pair, GaWork* work) {
-  if (is_better(fit_pa, eval(a, work->tmp))) {
+// `fa` holds the parent's fitness on entry and the survivor's on return
+static void family_compete_single(uint64_t* a, double* fa, int pair, GaWork* work) {
+  double fit_child = eval(a, work->tmp);
+  if (is_better(*fa, fit_child)) {
     memcpy(a, work->family, words_per_ind() * sizeof(uint64_t));
     if (g_opts.interactive) printf("  Family %d: kept parent 1\n", pair);
-  } else if (g_opts.interactive) {
-    printf("  Family %d: kept child 1\n", pair);
+  } else {
+    *fa = fit_child;
+    if (g_opts.interactive) printf("  Family %d: kept child 1\n", pair);
   }
 }
 
@@ -514,7 +524,9 @@ static void family_compete_single(uint64_t* a, double fit_pa, int pair, GaWork* 
 // Under family elitism, each pair then competes with its parents (see family_compete)
 // RNG draws happen in the same order with or without elitism: crossover, then mutation of each
 // child, pair by pair
-static void iter_pop(uint64_t* pop, GaWork* work) {
+// On entry `fit` holds the selected parents' fitness; on return, that of whatever fills each slot.
+// Every child is evaluated exactly once, whether or not crossover or mutation changed it
+static void iter_pop(uint64_t* pop, double* fit, GaWork* work) {
   int words  = words_per_ind();
   int family = cfg.elitism == ELITISM_FAMILY;
 
@@ -524,7 +536,8 @@ static void iter_pop(uint64_t* pop, GaWork* work) {
     if (i + 1 == cfg.pop_size) {
       if (family) memcpy(work->family, a, words * sizeof(uint64_t));
       mutation(a, i);
-      if (family) family_compete_single(a, work->fits[work->picked[i]], i / 2, work);
+      if (family) family_compete_single(a, &fit[i], i / 2, work);
+      else fit[i] = eval(a, work->tmp);
       break;
     }
 
@@ -533,9 +546,12 @@ static void iter_pop(uint64_t* pop, GaWork* work) {
     crossover(a, b);
     mutation(a, i);
     mutation(b, i + 1);
-    if (family)
-      family_compete(a, b, work->fits[work->picked[i]], work->fits[work->picked[i + 1]], i / 2,
-                     work);
+    if (family) {
+      family_compete(a, b, &fit[i], &fit[i + 1], i / 2, work);
+    } else {
+      fit[i]     = eval(a, work->tmp);
+      fit[i + 1] = eval(b, work->tmp);
+    }
   }
 }
 
@@ -550,13 +566,13 @@ static void print_ind_bits(const uint64_t* ind) {
   }
 }
 
-// `tmp` is the decode scratch (n_dims doubles)
-static void print_pop(const uint64_t* pop, double* tmp) {
+// `fit` is the population's cached fitness, `tmp` the decode scratch (n_dims doubles)
+static void print_pop(const uint64_t* pop, const double* fit, double* tmp) {
   int words    = words_per_ind();
-  int best_idx = find_best(pop, tmp);
+  int best_idx = find_best(fit);
 
   for (int i = 0; i < cfg.pop_size; i++) {
-    double fit = eval(pop + i * words, tmp);
+    decode_linear(pop + i * words, tmp);
 
     if (i == best_idx) printf(">> Individual %2d\n", i);
     else printf("   Individual %2d\n", i);
@@ -569,12 +585,12 @@ static void print_pop(const uint64_t* pop, double* tmp) {
     print_vec(tmp);
     printf("\n");
 
-    printf("     fitness = %g\n\n", fit);
+    printf("     fitness = %g\n\n", fit[i]);
   }
 }
 
-// `tmp` is the decode scratch (n_dims doubles)
-static void print_pairs(const uint64_t* pop, double* tmp) {
+// `fit` is the population's cached fitness, `tmp` the decode scratch (n_dims doubles)
+static void print_pairs(const uint64_t* pop, const double* fit, double* tmp) {
   int words = words_per_ind();
 
   for (int i = 0; i < cfg.pop_size; i++) {
@@ -583,7 +599,7 @@ static void print_pairs(const uint64_t* pop, double* tmp) {
     if (is_odd_last) printf("  Pair %d  (no partner)\n", i / 2);
     else printf("  Pair %d\n", i / 2);
 
-    double fit = eval(pop + i * words, tmp);
+    decode_linear(pop + i * words, tmp);
     printf("    Individual %d\n", i);
     printf("      bits: ");
     print_ind_bits(pop + i * words);
@@ -591,7 +607,7 @@ static void print_pairs(const uint64_t* pop, double* tmp) {
     printf("      x:    ");
     print_vec(tmp);
     printf("\n");
-    printf("      fitness = %g\n", fit);
+    printf("      fitness = %g\n", fit[i]);
 
     if (is_odd_last) {
       printf("\n");
@@ -599,7 +615,7 @@ static void print_pairs(const uint64_t* pop, double* tmp) {
     }
 
     i++;
-    fit = eval(pop + i * words, tmp);
+    decode_linear(pop + i * words, tmp);
     printf("    Individual %d\n", i);
     printf("      bits: ");
     print_ind_bits(pop + i * words);
@@ -607,7 +623,7 @@ static void print_pairs(const uint64_t* pop, double* tmp) {
     printf("      x:    ");
     print_vec(tmp);
     printf("\n");
-    printf("      fitness = %g\n\n", fit);
+    printf("      fitness = %g\n\n", fit[i]);
   }
 }
 
@@ -625,12 +641,12 @@ static void init_pop(uint64_t* pop) {
 
 // --- Entry point ---
 
-static void run_selection(uint64_t* pop, GaWork* work) {
+static void run_selection(uint64_t* pop, double* fit, GaWork* work) {
   switch (cfg.selection) {
     case ROULETTE:
     case ROULETTE_NORMALIZED:
-    case RANK:                selection_wheel(pop, work); break;
-    case TOURNAMENT:          selection_tournament(pop, work); break;
+    case RANK:                selection_wheel(pop, fit, work); break;
+    case TOURNAMENT:          selection_tournament(pop, fit, work); break;
   }
 }
 
@@ -638,14 +654,16 @@ static void ga_run(RunResult* out) {
   int words = words_per_ind();
 
   uint64_t* pop  = xcalloc((size_t) cfg.pop_size * (size_t) words, sizeof(uint64_t));
+  double*   fit  = xmalloc((size_t) cfg.pop_size * sizeof(double));  // cached fitness of pop[i]
   GaWork    work = work_alloc();
   double*   tmp  = work.tmp;
 
   init_pop(pop);
+  for (int i = 0; i < cfg.pop_size; i++) fit[i] = eval(pop + i * words, tmp);
 
   if (g_opts.interactive) {
     printf("Initial Population\n\n");
-    print_pop(pop, tmp);
+    print_pop(pop, fit, tmp);
     wait_for_enter();
     print_separator();
   }
@@ -654,32 +672,33 @@ static void ga_run(RunResult* out) {
   for (int gen = 0; gen < g_cfg.iterations; gen++) {
     if (g_opts.interactive) {
       print_iteration_header(gen);
-      run_selection(pop, &work);
-      print_pairs(pop, tmp);
+      run_selection(pop, fit, &work);
+      print_pairs(pop, fit, tmp);
       wait_for_enter();
       print_separator();
-      iter_pop(pop, &work);
+      iter_pop(pop, fit, &work);
       printf("Current Population\n\n");
-      print_pop(pop, tmp);
+      print_pop(pop, fit, tmp);
       wait_for_enter();
       print_separator();
     } else {
-      run_selection(pop, &work);
-      iter_pop(pop, &work);
+      run_selection(pop, fit, &work);
+      iter_pop(pop, fit, &work);
     }
     // Best of this generation; it's what both the progress line and the early stop look at
-    double gen_best = eval(pop + find_best(pop, tmp) * words, tmp);
+    double gen_best = fit[find_best(fit)];
     if (!g_opts.interactive) print_iteration_line(gen, gen_best);
     if (stop_check(&stop, gen, gen_best)) break;
   }
 
   // Final result: best of the final generation
-  int bi       = find_best(pop, tmp);
-  out->fitness = eval(pop + bi * words, tmp);  // leaves `tmp` holding the best position
-  memcpy(out->pos, tmp, g_cfg.n_dims * sizeof(double));
+  int bi       = find_best(fit);
+  out->fitness = fit[bi];
+  decode_linear(pop + bi * words, out->pos);
   out->stop = stop;
 
   work_free(&work);
+  free(fit);
   free(pop);
 }
 
