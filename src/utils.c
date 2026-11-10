@@ -110,6 +110,14 @@ int stop_check(StopState* st, int iter, double current_best) {
   return 1;
 }
 
+void fmt_exact(char* buf, double x) {
+  // %.17g always reads back exactly; NaN never compares equal, so it falls through to there
+  for (int p = 6; p <= 17; p++) {
+    snprintf(buf, FMT_EXACT_LEN, "%.*g", p, x);
+    if (strtod(buf, NULL) == x) return;
+  }
+}
+
 void print_result(const RunResult* r) {
   for (int i = 0; i < LINE_WIDTH; i++) printf("=");
   printf("\n");
@@ -124,7 +132,9 @@ void print_result(const RunResult* r) {
   printf("   pos: [ ");
   for (int d = 0; d < g_cfg.n_dims; d++) printf("%7.3f ", r->pos[d]);
   printf("]\n");
-  printf("   fitness = %g\n\n", r->fitness);
+  char fit[FMT_EXACT_LEN];
+  fmt_exact(fit, r->fitness);
+  printf("   fitness = %s\n\n", fit);
 
   if (r->stop.reason == STOP_TARGET)
     printf("Stopped early at iteration %d: target fitness %g reached\n\n", r->stop.iteration,

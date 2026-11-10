@@ -79,11 +79,13 @@ static void print_job_line(const Printer* p, int j) {
   const RunResult* res = &p->results[j];
   int              r   = j % p->batch->replicates;
 
-  char best[40], evals[32];
-  snprintf(best, sizeof(best), "best = %g", res->fitness);
+  char fit[FMT_EXACT_LEN], best[FMT_EXACT_LEN + 8], evals[32];
+  fmt_exact(fit, res->fitness);
+  snprintf(best, sizeof(best), "best = %s", fit);
   snprintf(evals, sizeof(evals), "evals %" PRIu64, res->evaluations);
 
-  printf("%-*s  r%-*d  seed 0x%08x  %-19s  iters %-*d  ", p->label_w, rc->label, p->rep_w, r,
+  // best is padded to its longest form, "best = " and 24 characters: -1.2345678901234567e-308
+  printf("%-*s  r%-*d  seed 0x%08x  %-31s  iters %-*d  ", p->label_w, rc->label, p->rep_w, r,
          job_seed(p->batch, r), best, p->iter_w, res->iterations);
   switch (res->stop.reason) {
     case STOP_NONE:       printf("%s\n", evals); break;

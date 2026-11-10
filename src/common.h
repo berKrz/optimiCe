@@ -78,6 +78,12 @@ void wait_for_enter(void);
 void print_separator(void);
 void print_iteration_header(int iter);
 void print_iteration_line(int iter, double best_fitness);
+
+// Writes the shortest %g form of x, at 6 to 17 significant digits, that reads back as exactly x
+// Used for final results, so a printed value identifies the double; starting at 6 means it
+// matches plain %g whenever %g was already exact
+#define FMT_EXACT_LEN 32
+void fmt_exact(char* buf, double x);
 // Early stopping: algorithms call stop_check once per iteration with their current best fitness
 // and leave the loop when it returns 1
 // The state tracks its own best-ever, so stagnation is measured the same way for every algorithm,
