@@ -20,6 +20,7 @@ SRC    = $(SRCDIR)/main.c \
          $(SRCDIR)/config.c \
          $(SRCDIR)/toml.c \
          $(SRCDIR)/batch.c \
+         $(SRCDIR)/output.c \
          $(SRCDIR)/args.c \
          $(SRCDIR)/algorithms/pso.c \
          $(SRCDIR)/algorithms/ga.c \
@@ -27,7 +28,21 @@ SRC    = $(SRCDIR)/main.c \
 OBJ    = $(SRC:.c=.o)
 DEP    = $(OBJ:.o=.d)
 
+# Commit the binary was built from, for the results file's header: the short hash, plus "-dirty"
+# when the tree had uncommitted changes (a git tag instead, once one exists)
+# The flake passes it in, since a Nix build has no .git
+VERSION ?= $(shell git describe --always --dirty 2>/dev/null || echo unknown)
+
 all: $(TARGET)
+
+# Regenerated on every make, but only rewritten when the version changed, so output.o is rebuilt
+# exactly when the commit (or its dirty state) changes and nothing else is
+$(SRCDIR)/version.h: FORCE
+	@printf '#define OPTIMICE_VERSION "%s"\n' '$(VERSION)' > $@.tmp
+	@if cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; fi
+
+# Listed explicitly: on a first build there's no .d file yet to say output.c includes version.h
+$(SRCDIR)/output.o: $(SRCDIR)/version.h
 
 $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
@@ -36,8 +51,8 @@ $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm -f $(OBJ) $(DEP) $(TARGET)
+	rm -f $(OBJ) $(DEP) $(TARGET) $(SRCDIR)/version.h
 
 -include $(DEP)
 
-.PHONY: all clean
+.PHONY: all clean FORCE

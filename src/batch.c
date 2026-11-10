@@ -94,12 +94,24 @@ static void print_job_line(const Printer* p, int j) {
   }
 }
 
+// The job's row in the --output file, if any; called right after its terminal line, so both come
+// out in job order
+static void write_job_row(const Batch* batch, int j, const RunResult* res) {
+  const RunConfig* rc = &batch->runs[j / batch->replicates];
+  int              r  = j % batch->replicates;
+  output_row(rc->label, r, job_seed(batch, r), rc->cfg.n_dims, res);
+}
+
 // Marks job j finished and prints every line the cursor can now reach: a line is printed once all
 // jobs before it have finished, so lines come out in job order as soon as they can
 static void job_finished(Printer* p, int j) {
   int total  = batch_jobs(p->batch);
   p->done[j] = 1;
-  while (p->cursor < total && p->done[p->cursor]) print_job_line(p, p->cursor++);
+  while (p->cursor < total && p->done[p->cursor]) {
+    print_job_line(p, p->cursor);
+    write_job_row(p->batch, p->cursor, &p->results[p->cursor]);
+    p->cursor++;
+  }
   fflush(stdout);
 }
 
@@ -182,6 +194,7 @@ void run_batch(const Batch* batch) {
     // Single job: per-iteration output, then the full footer (g_cfg still holds the job's config)
     run_job(batch, 0, &results[0]);
     print_result(&results[0]);
+    write_job_row(batch, 0, &results[0]);
   } else {
     int n_threads = thread_count(total);
 

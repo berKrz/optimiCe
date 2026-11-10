@@ -4,7 +4,7 @@
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
   outputs =
-    { nixpkgs, ... }:
+    { self, nixpkgs, ... }:
     let
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
     in
@@ -26,7 +26,9 @@
         src = ./.;
         nativeBuildInputs = [ pkgs.pkg-config ];
         buildInputs = [ pkgs.tomlc17 ];
-        buildPhase = "make";
+        # The source Nix builds from has no .git, so the commit is passed in; dirtyShortRev is
+        # what the flake gets when built from a tree with uncommitted changes
+        buildPhase = "make VERSION=${self.shortRev or self.dirtyShortRev or "unknown"}";
         installPhase = ''
           mkdir -p $out/bin
           cp optimice $out/bin/

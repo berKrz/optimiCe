@@ -132,6 +132,18 @@ void dump_config(void);
 // toml.c - parses, merges and validates every [[run]]; the TOML tree is freed on return
 Batch load_batch(const char* filename);
 
+// output.c - the --output results file
+// output_open picks the path from `arg` (NULL: a generated name in the current directory; a
+// trailing slash or an existing directory: a generated name inside it; anything else: that file),
+// creates missing directories, prints the path to stderr and writes the header and column row;
+// output_row writes one job's row
+// Every write is checked: a failure dies naming the file
+// Without output_open, the others do nothing
+void output_open(const Batch* batch, const char* config_path, const char* arg);
+void output_row(const char* label, int replicate, uint32_t seed, int n_dims, const RunResult* res);
+void output_flush(void);
+void output_close(void);
+
 // batch.c
 int  batch_jobs(const Batch* ex);    // runs x replicates
 void load_run(const RunConfig* rc);  // copies both config images into this thread's cfgs

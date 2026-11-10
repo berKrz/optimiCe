@@ -84,13 +84,58 @@ If you install it under a non-default prefix, point `pkg-config` at it when buil
 ./optimice -f example.toml
 ```
 
-| Flag       | Long form       | Description                                                |
-|------------|-----------------|------------------------------------------------------------|
-| `-f FILE`  | `--config FILE` | Path to TOML configuration file (required)                 |
-| `-i`       | `--interactive` | Pause after each iteration; the batch must be a single job |
-| `-l`       | `--list`        | List available algorithms                                  |
-| `-d`       | `--dump-config` | Print the resolved configuration and exit                  |
-| `-h [ALG]` | `--help [ALG]`  | General help, or algorithm-specific help if `ALG` is given |
+| Flag        | Long form         | Description                                                              |
+|-------------|-------------------|--------------------------------------------------------------------------|
+| `-f FILE`   | `--config FILE`   | Path to TOML configuration file (required)                               |
+| `-i`        | `--interactive`   | Pause after each iteration; the batch must be a single job               |
+| `-l`        | `--list`          | List available algorithms                                                |
+| `-d`        | `--dump-config`   | Print the resolved configuration and exit                                |
+| `-o [PATH]` | `--output [PATH]` | Also write the results to a CSV file (see [Results file](#results-file)) |
+| `-h [ALG]`  | `--help [ALG]`    | General help, or algorithm-specific help if `ALG` is given               |
+
+### Results file
+
+`-o` writes the results to a file as well as printing them; the terminal output doesn't change. Where the file goes depends on the path:
+
+- `-o` with no path: a generated name in the current directory, `<config name>-<YYYYMMDD-HHMMSS>.csv` (e.g. `example-20261109-143205.csv`)
+- `-o results/`, ending in a slash, or naming a directory that already exists: a generated name inside it
+- `-o results/run.csv`: that file, replaced if it already exists
+
+Missing directories are created. A generated name never replaces an existing file: a second run of the same config within the same second gets `-2`, `-3`, … appended. The chosen path is printed to stderr (`Output: …`). `--dump-config` exits before the file is opened, so it never creates or touches one.
+
+The file starts with `#` comment lines saying where the results came from:
+
+```
+# optimice 85d62f0-dirty
+# config: experiments/rastrigin.toml (cksum 114835441 2397)
+# date: 2026-11-09 14:32:05 -0300
+# jobs: 12
+```
+
+The first line is the commit the binary was built from (`-dirty` if the tree had uncommitted changes). The second is the config file as given on the command line, with its `cksum`: running `cksum experiments/rastrigin.toml` prints the same two numbers as long as the file hasn't changed since. The date is local time, with its UTC offset.
+
+After the header comes a plain CSV table, one row per job, in the same order as the terminal lines:
+
+```
+run,replicate,seed,fitness,iterations,evaluations,stop,position
+pso-1,0,0x0000002a,0.000916229158228532,421,12660,target,0.001419190827760949 -0.001131818227894787 ...
+pso-1,1,0x0000002b,0.4381614526478135,500,15030,none,-0.031086559132914433 -0.020465036735787943 ...
+```
+
+| Column        | Meaning                                                                          |
+|---------------|----------------------------------------------------------------------------------|
+| `run`         | The run's label, as in the terminal output                                       |
+| `replicate`   | Replicate number, from 0                                                         |
+| `seed`        | The job's seed, in hex; it can be pasted back into `seed =` to reproduce the job |
+| `fitness`     | Best fitness found                                                               |
+| `iterations`  | Iterations completed (fewer than the budget after an early stop)                 |
+| `evaluations` | Fitness evaluations used                                                         |
+| `stop`        | `none`, `target` or `stagnation`                                                 |
+| `position`    | The best position, its coordinates separated by spaces                           |
+
+Numbers are written in the shortest form that reads back as the exact value, so the file holds the same doubles the run produced. Most CSV readers skip the header given a comment character, e.g. `pandas.read_csv(path, comment="#")` or `read.csv(path, comment.char = "#")` in R. The file is plain CSV with `.` as the decimal separator and `,` between fields.
+
+Rows are written as jobs finish, in job order, and each one is flushed immediately: a batch that's interrupted leaves every row it completed. Comparing the number of rows with `# jobs:` tells a complete file from an interrupted one. The file is the same whatever the number of threads, apart from the date.
 
 ## Configuration
 

@@ -1,5 +1,6 @@
 *.o
 *.d
+*.csv
 optimice
 result
 result-*
@@ -11,3 +12,5 @@ result-*
 .envrc
 
 compile_commands.json
+
+src/version.h

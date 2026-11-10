@@ -35,6 +35,8 @@ static void print_help_overview(void) {
       "  -i, --interactive       Pause after each iteration (single job only)\n"
       "  -l, --list              List available algorithms\n"
       "  -d, --dump-config       Print the resolved configuration and exit\n"
+      "  -o, --output [path]     Also write results as CSV: to a file, into a directory (path\n"
+      "                          ending in /), or, without a path, to a generated name here\n"
       "  -h, --help [ALG]        General help, or help for a specific algorithm\n");
   print_runner_fields();
   printf("\nAlgorithms:\n");
@@ -69,6 +71,7 @@ Batch parse_args(int argc, char** argv) {
       {"interactive", no_argument,       NULL, 'i'},
       {"list",        no_argument,       NULL, 'l'},
       {"dump-config", no_argument,       NULL, 'd'},
+      {"output",      optional_argument, NULL, 'o'},
       {"help",        no_argument,       NULL, 'h'},
       {NULL,          0,                 NULL, 0  },
   };
@@ -76,10 +79,12 @@ Batch parse_args(int argc, char** argv) {
   const char* config_path = NULL;
   int         want_help   = 0;
   int         want_config = 0;
+  int         want_output = 0;
+  const char* output_arg  = NULL;  // NULL with want_output: generate a name
 
   opterr = 0;
   int c;
-  while ((c = getopt_long(argc, argv, "f:F:iIlLdDhH", long_options, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "f:F:iIlLdDo::O::hH", long_options, NULL)) != -1) {
     switch (c) {
       case 'f':
       case 'F': config_path = optarg; break;
@@ -89,6 +94,16 @@ Batch parse_args(int argc, char** argv) {
       case 'L': print_list(); exit(EXIT_SUCCESS);
       case 'd':
       case 'D': want_config = 1; break;
+      case 'o':
+      case 'O':
+        // --output takes an optional value, but getopt only attaches one written as --output=FILE
+        // or -oFILE: with "-o FILE", FILE would be left over as a stray argument. So take the
+        // next argument ourselves, unless it starts with '-' (it's the next option, so -o came
+        // bare). A bare -o leaves output_arg NULL: a name is generated in the current directory
+        if (!optarg && optind < argc && argv[optind][0] != '-') optarg = argv[optind++];
+        want_output = 1;
+        output_arg  = optarg;
+        break;
       case 'h':
       case 'H': want_help = 1; break;
 
@@ -127,5 +142,8 @@ Batch parse_args(int argc, char** argv) {
     dump_batch(&batch);
     exit(EXIT_SUCCESS);
   }
+  // Opened before the first job, so a bad path fails before any work; after the dump, so
+  // --dump-config never creates or truncates a file
+  if (want_output) output_open(&batch, config_path, output_arg);
   return batch;
 }
