@@ -12,10 +12,11 @@ typedef enum { PBEST_POSITION, PBEST_RANDOM } PbestInit;
 typedef enum { GBEST_ASYNC, GBEST_SYNC } GbestUpdate;
 
 typedef struct {
-  int         swarm_size;
-  double      w;
-  double      w_end;  // inertia at the last iteration; NaN until validate resolves it to w
-  double      v_max;  // velocity cap as a fraction of the domain width; 0 disables it
+  int    swarm_size;
+  double w;
+  double w_end;  // inertia at the last iteration; NaN until validate resolves it to w
+  double v_max;  // velocity cap as a fraction of the domain width (of the init range's when
+                 // the domain is unbounded); 0 disables it
   double      c1;
   double      c2;
   PbestInit   pbest_init;
@@ -55,7 +56,8 @@ static const FieldSpec pso_fields[] = {
     {"gbest_update", FIELD_ENUM, SCOPE_ALGO, offsetof(PsoConfig, gbest_update), gbest_update_table,
      "async", "gbest update: async | sync"},
     {"bounds", FIELD_ENUM, SCOPE_ALGO, offsetof(PsoConfig, bounds), bounds_table, "clamp",
-     "Out-of-domain handling: clamp | reflect | random | none"},
+     "Out-of-domain handling: clamp | reflect | random (ignored when the domain has no finite "
+     "end)"},
     {NULL, 0, 0, 0, NULL, NULL, NULL},
 };
 
@@ -131,7 +133,7 @@ static void init_swarm(Particle* swarm, double* data, double* gbest_pos, double*
     swarm[i].pbest_updated = 0;
 
     for (int d = 0; d < g_cfg.n_dims; d++) {
-      swarm[i].pos[d] = rng_next_double_range(g_cfg.domain_min, g_cfg.domain_max);
+      swarm[i].pos[d] = rng_next_double_range(g_cfg.init_min, g_cfg.init_max);
       swarm[i].vel[d] = 0.0;
     }
 
@@ -142,7 +144,7 @@ static void init_swarm(Particle* swarm, double* data, double* gbest_pos, double*
       swarm[i].pbest_fitness = swarm[i].fitness;
     } else {
       for (int d = 0; d < g_cfg.n_dims; d++)
-        swarm[i].pbest[d] = rng_next_double_range(g_cfg.domain_min, g_cfg.domain_max);
+        swarm[i].pbest[d] = rng_next_double_range(g_cfg.init_min, g_cfg.init_max);
       swarm[i].pbest_fitness = evaluate(swarm[i].pbest);
     }
   }
@@ -162,7 +164,11 @@ static double inertia(int iter) {
 }
 
 static void update_swarm(Particle* swarm, double* gbest_pos, double* gbest_fitness, double w) {
-  double v_cap = cfg.v_max * (g_cfg.domain_max - g_cfg.domain_min);  // 0 when disabled
+  // v_max is a fraction of the domain's width; an unbounded domain has none, so the init range's
+  // stands in as the scale of the search
+  int    bounded = isfinite(g_cfg.domain_min) && isfinite(g_cfg.domain_max);
+  double width   = bounded ? g_cfg.domain_max - g_cfg.domain_min : g_cfg.init_max - g_cfg.init_min;
+  double v_cap   = cfg.v_max * width;  // 0 when disabled
 
   for (int i = 0; i < cfg.swarm_size; i++) {
     swarm[i].pbest_updated = 0;

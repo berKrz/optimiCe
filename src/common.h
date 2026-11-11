@@ -20,6 +20,8 @@ typedef struct {
   int          n_dims;
   double       domain_min;
   double       domain_max;
+  double       init_min;        // range the initial population is drawn from, inside the domain
+  double       init_max;        // NaN until validate resolves an unset end to the domain's
   int          iterations;      // hard cap on every run
   double       target_fitness;  // early stop once the current best reaches it; NaN = off
   int          stagnation;      // early stop after this many iterations without improving; 0 = off
@@ -128,6 +130,7 @@ void     rng_init(uint32_t seed);
 double   rng_next_double(void);
 double   rng_next_double_range(double lo, double hi);
 int      rng_next_int(int lo, int hi);  // half-open: [lo, hi)
+uint64_t rng_next_uint64(uint64_t n);   // half-open: [0, n), n > 0
 int      rng_next_bit(void);
 
 // config.c

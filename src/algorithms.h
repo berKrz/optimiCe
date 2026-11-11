@@ -97,21 +97,21 @@ const char* enum_name(const EnumEntry* table, int value);
 
 // bounds.c - out-of-domain handling shared by continuous-position algorithms
 // clamp pins the coordinate to the violated bound, reflect mirrors it back inside (bouncing as
-// many times as needed), random redraws it uniformly in the domain, none leaves it wherever it
-// lands (the domain then only sets the initial population and any re-init draws)
+// many times as needed), random redraws it uniformly in the domain
 // When a velocity is given (v != NULL), clamp and random zero it and reflect flips its sign on an
 // odd number of bounces
-typedef enum { BOUNDS_CLAMP, BOUNDS_REFLECT, BOUNDS_RANDOM, BOUNDS_NONE } BoundsMode;
+// An infinite end of the domain is never violated, so the mode only matters at a finite one
+typedef enum { BOUNDS_CLAMP, BOUNDS_REFLECT, BOUNDS_RANDOM } BoundsMode;
 
 extern const EnumEntry bounds_table[];
 
-// Brings one coordinate back into [domain_min, domain_max]; no-op when already inside, and for a
-// finite coordinate under none (a non-finite one is still clamped)
+// Brings one coordinate back into [domain_min, domain_max]; no-op when already inside
+// A non-finite coordinate is always brought back to a finite value, even in an unbounded domain
 // `v` is the matching velocity component, or NULL for algorithms without one
 void apply_bounds(double* x, double* v, BoundsMode mode);
 
-// Dies when `mode` is none but the fitness function is only defined on a bounded domain
-// Called from each algorithm's validate, after the runner has resolved g_cfg.fitness
+// Dies when `mode` can't work on the run's domain: random on a domain with one infinite end
+// Called from each algorithm's validate, after the runner has validated the domain
 void check_bounds_mode(BoundsMode mode);
 
 // Walks the keys of `tab` (a TOML_TABLE datum) in file order, resolving each against runner_fields

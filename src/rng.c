@@ -48,4 +48,14 @@ double rng_next_double_range(double lo, double hi) { return lo + (hi - lo) * rng
 
 int rng_next_int(int lo, int hi) { return lo + (int) (rng_next_double() * (hi - lo)); }
 
+// Rejection sampling: draws at or above the largest multiple of n are retried, so every value in
+// [0, n) is equally likely, however large n is
+uint64_t rng_next_uint64(uint64_t n) {
+  uint64_t limit = UINT64_MAX - UINT64_MAX % n;
+  uint64_t r;
+  do r = next();
+  while (r >= limit);
+  return r % n;
+}
+
 int rng_next_bit(void) { return rng_next_int(0, 2); }

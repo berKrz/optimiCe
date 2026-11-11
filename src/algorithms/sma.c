@@ -24,9 +24,10 @@ static const FieldSpec sma_fields[] = {
     {"pop_size", FIELD_INT, SCOPE_ALGO, offsetof(SmaConfig, pop_size), NULL, "30",
      "Population size"},
     {"z", FIELD_DOUBLE, SCOPE_ALGO, offsetof(SmaConfig, z), NULL, "0.03",
-     "Full re-init probability (per slime)"},
+     "Full re-init probability (per slime), into the init range"},
     {"bounds", FIELD_ENUM, SCOPE_ALGO, offsetof(SmaConfig, bounds), bounds_table, "clamp",
-     "Out-of-domain handling: clamp | reflect | random | none"},
+     "Out-of-domain handling: clamp | reflect | random (ignored when the domain has no finite "
+     "end)"},
     {NULL, 0, 0, 0, NULL, NULL, NULL},
 };
 
@@ -103,10 +104,10 @@ static void sma_run(RunResult* out) {
   double* weights   = slab + cfg.pop_size * g_cfg.n_dims;
   double* fits      = slab + 2 * cfg.pop_size * g_cfg.n_dims;
 
-  // Initial population: uniform random in [domain_min, domain_max]
+  // Initial population: uniform random in the init range
   for (int i = 0; i < cfg.pop_size; i++) {
     for (int d = 0; d < g_cfg.n_dims; d++)
-      positions[i * g_cfg.n_dims + d] = rng_next_double_range(g_cfg.domain_min, g_cfg.domain_max);
+      positions[i * g_cfg.n_dims + d] = rng_next_double_range(g_cfg.init_min, g_cfg.init_max);
     fits[i] = evaluate(positions + i * g_cfg.n_dims);
   }
 
@@ -168,9 +169,9 @@ static void sma_run(RunResult* out) {
     for (int i = 0; i < cfg.pop_size; i++) {
       if (rng_next_double() < cfg.z) {
         // Whole-slime re-init - one draw per slime
+        // A re-initialization, so it draws from the init range, like the initial population
         for (int d = 0; d < g_cfg.n_dims; d++)
-          positions[i * g_cfg.n_dims + d] =
-              rng_next_double_range(g_cfg.domain_min, g_cfg.domain_max);
+          positions[i * g_cfg.n_dims + d] = rng_next_double_range(g_cfg.init_min, g_cfg.init_max);
       } else {
         double p = tanh(fabs(fits[i] - DF));
         for (int d = 0; d < g_cfg.n_dims; d++) {

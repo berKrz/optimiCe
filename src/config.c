@@ -286,9 +286,13 @@ const FieldSpec runner_fields[] = {
     {"stagnation", FIELD_INT, SCOPE_GLOBAL, offsetof(Config, stagnation), NULL, "0",
      "Stop early after N iterations without improvement (0 = off)"},
     {"domain_min", FIELD_DOUBLE, SCOPE_GLOBAL, offsetof(Config, domain_min), NULL, "-5.0",
-     "Lower bound of the domain"},
+     "Lower bound of the domain (-inf = unbounded below)"},
     {"domain_max", FIELD_DOUBLE, SCOPE_GLOBAL, offsetof(Config, domain_max), NULL, "5.0",
-     "Upper bound of the domain"},
+     "Upper bound of the domain (inf = unbounded above)"},
+    {"init_min", FIELD_DOUBLE, SCOPE_GLOBAL, offsetof(Config, init_min), NULL, "nan",
+     "Lower end of the initial population's range (unset = domain_min)"},
+    {"init_max", FIELD_DOUBLE, SCOPE_GLOBAL, offsetof(Config, init_max), NULL, "nan",
+     "Upper end of the initial population's range (unset = domain_max)"},
     {"fitness", FIELD_FITNESS, SCOPE_GLOBAL, offsetof(Config, fitness), NULL, "sphere",
      "Fitness function"},
     {"algorithm", FIELD_ALGORITHM, SECTION_RUN, 0, NULL, NULL, "Algorithm to run: pso | ga | sma"},
@@ -332,13 +336,32 @@ void print_help_from_table(const FieldSpec* table, unsigned scope) {
 void validate(void) {
   if (!g_cfg.algorithm) die("algorithm not set in config file");
   if (g_cfg.n_dims < 1) die("n_dims must be at least 1");
-  // The domain is what every uniform draw samples from, so it has to be finite, and so does its
-  // width: two finite bounds can still be too far apart to subtract
-  if (!isfinite(g_cfg.domain_min) || !isfinite(g_cfg.domain_max))
-    die("domain_min and domain_max must be finite");
+  // Either end of the domain may be infinite: the search is unbounded on that side
+  // Two finite ends can still be too far apart to subtract
   if (g_cfg.domain_min >= g_cfg.domain_max) die("domain_min must be strictly less than domain_max");
-  if (!isfinite(g_cfg.domain_max - g_cfg.domain_min))
+  if (isfinite(g_cfg.domain_min) && isfinite(g_cfg.domain_max) &&
+      !isfinite(g_cfg.domain_max - g_cfg.domain_min))
     die("the domain is too wide: domain_max - domain_min must be finite");
+
+  // Not a check: an unset end of the init range is the domain's, resolved here so dump and run
+  // see it. An infinite end of the domain can't stand in: the init range is what uniform draws
+  // sample from, so it has to be finite, and so does its width
+  if (isnan(g_cfg.init_min)) {
+    if (isinf(g_cfg.domain_min)) die("domain_min is infinite, so init_min must be set");
+    g_cfg.init_min = g_cfg.domain_min;
+  }
+  if (isnan(g_cfg.init_max)) {
+    if (isinf(g_cfg.domain_max)) die("domain_max is infinite, so init_max must be set");
+    g_cfg.init_max = g_cfg.domain_max;
+  }
+  if (!isfinite(g_cfg.init_min) || !isfinite(g_cfg.init_max))
+    die("init_min and init_max must be finite");
+  if (g_cfg.init_min >= g_cfg.init_max) die("init_min must be less than init_max");
+  if (!isfinite(g_cfg.init_max - g_cfg.init_min))
+    die("the init range is too wide: init_max - init_min must be finite");
+  if (g_cfg.init_min < g_cfg.domain_min || g_cfg.init_max > g_cfg.domain_max)
+    die("the init range must be inside the domain");
+
   if (g_cfg.iterations < 1) die("iterations must be positive");
   if (g_cfg.stagnation < 0) die("stagnation must be non-negative (0 disables it)");
 
@@ -379,6 +402,8 @@ void dump_config(void) {
   printf("stagnation     = %d\n", g_cfg.stagnation);
   printf("domain_min     = %g\n", g_cfg.domain_min);
   printf("domain_max     = %g\n", g_cfg.domain_max);
+  printf("init_min       = %g\n", g_cfg.init_min);
+  printf("init_max       = %g\n", g_cfg.init_max);
   printf("fitness        = %s\n", fe ? fe->name : "(unknown)");
 
   if (!g_cfg.algorithm) return;

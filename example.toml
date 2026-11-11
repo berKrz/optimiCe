@@ -11,11 +11,12 @@ direction = "minimize"
 n_dims = 10
 domain_min = -5.12
 domain_max = 5.12
-iterations = 5000      # iteration budget (generations, for GA)
-target_fitness = 1e-5  # stop early once the best is at least this good
-stagnation = 100       # stop early after 100 iterations without improvement
-replicates = 5         # every run below, 5 times
-seed = 42              # base seed; when omitted, one is generated and printed
+# init_min / init_max narrow the range the initial population is drawn from (default: the domain)
+iterations = 5000     # iteration budget (generations, for GA)
+target_fitness = 1e-5 # stop early once the best is at least this good
+stagnation = 100      # stop early after 100 iterations without improvement
+replicates = 5        # every run below, 5 times
+seed = 42             # base seed; when omitted, one is generated and printed
 
 # --- Defaults for every PSO run ---------------------------------------------------------------
 [defaults.pso]

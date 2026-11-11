@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -140,12 +141,56 @@ static void validate_cut_points(void) {
   }
 }
 
+// --- Levels ---
+
+// A dimension's ind_size bits, read as an unsigned int, are its level: one of 2^ind_size evenly
+// spaced values, level 0 at domain_min and the last at domain_max
+// ind_size <= 63 guarantees 1ULL << ind_size stays well-defined
+static uint64_t max_level(void) { return (1ULL << cfg.ind_size) - 1ULL; }
+
+static double level_value(uint64_t level) {
+  return g_cfg.domain_min +
+         (double) level * (g_cfg.domain_max - g_cfg.domain_min) / (double) max_level();
+}
+
+// The levels that decode inside the init range: every level in [*lo, *hi]
+// Returns 0 when there are none, i.e. when the range fits between two neighbouring levels
+// Levels decode to increasing values, so each end is a binary search over [0, max_level() + 1),
+// tested with level_value itself: "inside" means what decode_dim will later compute
+static int init_levels(uint64_t* lo, uint64_t* hi) {
+  // first: the lowest level at or above init_min (one past the last level if there is none)
+  uint64_t first = 0, end = max_level() + 1;
+  while (first < end) {
+    uint64_t mid = first + (end - first) / 2;
+    if (level_value(mid) >= g_cfg.init_min) end = mid;
+    else first = mid + 1;
+  }
+
+  // past: the lowest level above init_max, so the last one inside is past - 1
+  uint64_t past = 0;
+  end           = max_level() + 1;
+  while (past < end) {
+    uint64_t mid = past + (end - past) / 2;
+    if (level_value(mid) > g_cfg.init_max) end = mid;
+    else past = mid + 1;
+  }
+
+  if (first >= past) return 0;
+  *lo = first;
+  *hi = past - 1;
+  return 1;
+}
+
 static void ga_validate(void) {
   if (cfg.pop_size < 2) die("pop_size must be >= 2");
   if (cfg.ind_size < 2 || cfg.ind_size > 63) die("ind_size must be in [2, 63]");
+  if (!isfinite(g_cfg.domain_min) || !isfinite(g_cfg.domain_max))
+    die("ga needs a finite domain: its bits decode onto [domain_min, domain_max]");
   // Bits are indexed with ints, and so are the words of the whole population
   check_fits_int(g_cfg.n_dims, cfg.ind_size, "n_dims x ind_size");
   check_fits_int(cfg.pop_size, words_per_ind(), "pop_size x n_dims x ind_size");
+  uint64_t lo, hi;
+  if (!init_levels(&lo, &hi)) die("the init range holds no value that ind_size bits can represent");
   if (!(cfg.mutation_rate >= 0.0 && cfg.mutation_rate < 1.0))
     die("mutation_rate must be in [0.0, 1.0)");
   // tournament_size is ignored under other selections, so it's only checked when in use
@@ -184,15 +229,12 @@ static void ga_dump(void) {
 
 // --- Decode / eval ---
 
-// Reads ind_size bits of dimension d as an unsigned int and linearly maps it onto [domain_min,
-// domain_max]. ind_size <= 63 guarantees 1ULL << ind_size stays well-defined
 static double decode_dim(const uint64_t* ind, int d) {
-  int      base = d * cfg.ind_size;
-  uint64_t n    = 0;
+  int      base  = d * cfg.ind_size;
+  uint64_t level = 0;
   for (int b = 0; b < cfg.ind_size; b++)
-    if (bit_get(ind, base + b)) n |= (1ULL << b);
-  double max_n = (double) ((1ULL << cfg.ind_size) - 1ULL);
-  return g_cfg.domain_min + (double) n * (g_cfg.domain_max - g_cfg.domain_min) / max_n;
+    if (bit_get(ind, base + b)) level |= (1ULL << b);
+  return level_value(level);
 }
 
 static void decode_linear(const uint64_t* ind, double* pos) {
@@ -637,9 +679,25 @@ static void init_pop(uint64_t* pop) {
   int total_bits = g_cfg.n_dims * cfg.ind_size;
 
   // xcalloc in ga_run already zeroed the buffer; just set the 1 bits
-  for (int i = 0; i < cfg.pop_size; i++)
-    for (int b = 0; b < total_bits; b++)
-      if (rng_next_bit()) bit_set(pop + i * words, b, 1);
+  // The init range is the whole domain: every bit pattern is inside it, so the bits are random
+  if (g_cfg.init_min == g_cfg.domain_min && g_cfg.init_max == g_cfg.domain_max) {
+    for (int i = 0; i < cfg.pop_size; i++)
+      for (int b = 0; b < total_bits; b++)
+        if (rng_next_bit()) bit_set(pop + i * words, b, 1);
+    return;
+  }
+
+  // A narrower init range: random bits would land anywhere in the domain, so each dimension
+  // draws one of the levels that decode inside the range and gets that level's bits
+  uint64_t lo, hi;
+  init_levels(&lo, &hi);  // never empty: ga_validate checked
+  for (int i = 0; i < cfg.pop_size; i++) {
+    for (int d = 0; d < g_cfg.n_dims; d++) {
+      uint64_t level = lo + rng_next_uint64(hi - lo + 1);
+      for (int b = 0; b < cfg.ind_size; b++)
+        if ((level >> b) & 1ULL) bit_set(pop + i * words, d * cfg.ind_size + b, 1);
+    }
+  }
 }
 
 // --- Entry point ---

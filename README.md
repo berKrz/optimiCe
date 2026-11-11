@@ -7,7 +7,8 @@ optimiCe runs optimization algorithms against a chosen benchmark fitness functio
 ## Common
 
 - Eight standard benchmark fitness functions: `sphere`, `rosenbrock`, `rastrigin`, `griewank`, `ackley`, `eggholder`, `schwefel`, `schaffer_f6`
-- N-dimensional continuous search space
+- N-dimensional continuous search space, bounded or not: either end of the domain can be infinite where the fitness function is defined there (`sphere` and `rosenbrock`), for PSO and SMA; the GA's encoding needs a finite domain
+- Initialization range separate from the domain (`init_min`, `init_max`), for starting the search in a region narrower than its bounds, or anywhere at all when it has none
 - Minimization or maximization
 - Iteration budget shared by every algorithm (`iterations`; generations, for GA), with two optional early stoppers: `target_fitness` ends the run once the current best is at least as good as the target, and `stagnation` ends it after that many consecutive iterations without improving the best-ever. The final result reports how many iterations ran, and says when and why a run stopped early
 - Every run counts its fitness evaluations, the usual cost measure for comparing metaheuristics: iterations cost different amounts per algorithm and population size, evaluations don't. Each candidate solution is evaluated exactly once when it's created, so the count is the run's real cost
@@ -22,15 +23,16 @@ optimiCe runs optimization algorithms against a chosen benchmark fitness functio
 
 - Classical velocity update: `v ← w·v + c₁·r₁·(pbest − x) + c₂·r₂·(gbest − x)`
 - Optional linear inertia decay: `w` applies at the first iteration and `w_end` at the last, interpolated in between (Shi & Eberhart's `0.9 → 0.4` is the classic setting). Leaving `w_end` unset keeps the inertia constant
-- Optional velocity clamping (`v_max`): each velocity component is capped at `v_max × (domain_max − domain_min)`
+- Optional velocity clamping (`v_max`): each velocity component is capped at `v_max × (domain_max − domain_min)`; when the domain is unbounded, the init range's width is used instead
 - Asynchronous or synchronous gbest update (`gbest_update`): `async` moves gbest within the iteration as soon as any particle improves it, `sync` refreshes it once after the whole swarm has moved
-- Configurable boundary handling (`bounds`): `clamp` pins a particle to the bound and zeroes its velocity on that dimension (the default), `reflect` mirrors it back inside and reverses that velocity component, `random` redraws that coordinate uniformly and zeroes its velocity, `none` lets the particle leave the domain (only for fitness functions without domain bounds)
+- Configurable boundary handling (`bounds`): `clamp` pins a particle to the bound and zeroes its velocity on that dimension (the default), `reflect` mirrors it back inside and reverses that velocity component, `random` redraws that coordinate uniformly in the domain and zeroes its velocity
 - Configurable inertia (`w`), cognitive coefficient (`c1`), and social coefficient (`c2`)
-- `pbest` initialization by particle position, or by independent random draw
+- `pbest` initialization by particle position, or by independent random draw from the init range
 
 ## GA
 
 - Binary genetic algorithm over an N-dimensional continuous search space: each individual carries `n_dims × ind_size` bits, with each dimension's `ind_size`-bit slice linearly decoded onto `[domain_min, domain_max]`
+- Initial population of random bits, or, under an init range narrower than the domain, of the bit patterns that decode inside it
 - Four selection operators:
   - `roulette`: fitness-proportional, with weights shifted so the worst individual gets weight 1 (`max − f + 1` when minimizing, `f − min + 1` when maximizing). Works with negative fitness, but the `+1` is in fitness units, so selection pressure depends on the scale of the fitness values
   - `roulette_normalized`: like `roulette`, but the shift past the worst individual is the population's average fitness spacing (`range / (pop_size − 1)`) instead of 1 fitness unit. Pressure doesn't depend on the fitness scale, and the worst individual keeps a small chance of being picked
@@ -46,10 +48,10 @@ optimiCe runs optimization algorithms against a chosen benchmark fitness functio
 ## SMA
 
 - Rank-based weighting: at each iteration slimes are ranked by fitness; the better half gets weights `1 + r·log₁₀((bF − fᵢ)/S + 1)`, the worse half gets `1 − r·log₁₀(…)` — better rank attracts, worse rank repels
-- Three-branch position update per slime: with probability `z`, full uniform re-init; otherwise, per-dimension, probability `tanh|fᵢ − DF|` of exploiting around the best-ever using two random peers and amplitude `a = atanh(1 − t/T)`; else contract with amplitude `b = 1 − t/T`
+- Three-branch position update per slime: with probability `z`, full uniform re-init into the init range; otherwise, per-dimension, probability `tanh|fᵢ − DF|` of exploiting around the best-ever using two random peers and amplitude `a = atanh(1 − t/T)`; else contract with amplitude `b = 1 − t/T`
 - Decay: both `a` and `b` shrink to zero as `t → T`, trading exploration for exploitation across the run
 - Opportunistic best-ever update within the iteration (mirrors PSO's async gbest — later slimes see the fresh best)
-- Configurable boundary handling (`bounds`): `clamp` pins a coordinate to the bound (the default), `reflect` mirrors it back inside, `random` redraws it uniformly, `none` lets the slime leave the domain (only for fitness functions without domain bounds)
+- Configurable boundary handling (`bounds`): `clamp` pins a coordinate to the bound (the default), `reflect` mirrors it back inside, `random` redraws it uniformly in the domain
 
 ## Build
 
@@ -176,7 +178,7 @@ pbest_init = "position"
 - Keys are written exactly as listed in the tables below, with underscores.
 - Each key may appear only once per section. TOML rejects duplicates at parse time.
 - Values are typed: `int` fields take integers (`30`, not `30.0`), `float` fields take floats or integers (`5` is read as `5.0`), and `enum` / `name` fields take quoted strings (`"sphere"`).
-- `nan` is rejected, except in the optional float fields (`target_fitness`, `w_end`), where it means unset: a `[[run]]` can use it to turn off a value set in `[common]` or `[defaults.<algo>]`.
+- `nan` is rejected, except in the optional float fields (`target_fitness`, `init_min`, `init_max`, `w_end`), where it means unset: a `[[run]]` can use it to turn off a value set in `[common]` or `[defaults.<algo>]`.
 - Unknown keys, wrongly typed values, and keys in the wrong section are hard errors at startup. Messages name the file, section, and key, and a run by its label, e.g. `Error at 'example.toml [[run]] pso-2' [swarm-size]: unknown key for algorithm 'pso'`. A run whose `algorithm` is missing or unknown has no label yet and is named by its position instead (`[[run]] #3`).
 - Range and cross-field checks run on each run's merged configuration, after the whole file is read: `domain_min < domain_max`, each fitness function's `n_dims` and domain requirements, and each algorithm's own constraints. A problem that comes from `[common]` is reported against the first run it affects.
 - Every check runs before the first job starts, so a configuration either runs completely or not at all.
@@ -232,8 +234,10 @@ Fields that belong to the runner rather than to any algorithm.
 | `iterations`     | int    | `100`      | Iteration budget, the hard cap on every run (generations, for GA)                                            |
 | `target_fitness` | float  | unset      | Stop early once the current best is at least as good as this value                                           |
 | `stagnation`     | int    | `0`        | Stop early after this many consecutive iterations without improving the best-ever; `0` disables it           |
-| `domain_min`     | float  | `-5.0`     | Lower bound of each dimension; with `bounds = "none"`, of the initialization range only. Must be finite      |
-| `domain_max`     | float  | `5.0`      | Upper bound of each dimension; with `bounds = "none"`, of the initialization range only. Must be finite      |
+| `domain_min`     | float  | `-5.0`     | Lower bound of each dimension; `-inf` leaves the search unbounded below                                      |
+| `domain_max`     | float  | `5.0`      | Upper bound of each dimension; `inf` leaves the search unbounded above                                       |
+| `init_min`       | float  | (unset)    | Lower end of the range the initial population is drawn from; unset means `domain_min`. Must be finite and inside the domain; required when `domain_min` is `-inf` |
+| `init_max`       | float  | (unset)    | Upper end of the range the initial population is drawn from; unset means `domain_max`. Must be finite and inside the domain; required when `domain_max` is `inf` |
 | `fitness`        | name   | `sphere`   | One of the eight benchmark functions listed above. Some have fixed `n_dims` or stricter domain bounds, enforced at startup |
 | `algorithm`      | name   | required   | `pso`, `ga` or `sma`. `[[run]]` only                                                                         |
 
@@ -244,12 +248,12 @@ Fields that belong to the runner rather than to any algorithm.
 | `swarm_size`   | int   | `30`            | Number of particles                                                                      |
 | `w`            | float | `1.0`           | Inertia weight (at the first iteration, when `w_end` is set)                             |
 | `w_end`        | float | unset (= `w`)   | Inertia at the last iteration; linear decay from `w`. Unset means constant inertia       |
-| `v_max`        | float | `0.0`           | Velocity cap as a fraction of the domain width; `0` disables it                          |
+| `v_max`        | float | `0.0`           | Velocity cap as a fraction of the domain width, or of the init range's width when the domain is unbounded; `0` disables it |
 | `c1`           | float | `2.0`           | Cognitive coefficient                                                                    |
 | `c2`           | float | `2.0`           | Social coefficient                                                                       |
 | `pbest_init`   | enum  | `position`      | `position` (pbest starts at the initial position) or `random` (independent random point) |
 | `gbest_update` | enum  | `async`         | `async` (gbest moves as soon as a particle improves it) or `sync` (once per iteration)   |
-| `bounds`       | enum  | `clamp`         | Out-of-domain handling: `clamp`, `reflect`, `random` or `none`. Reflection bounces as many times as needed for coordinates that overshoot by more than the domain width |
+| `bounds`       | enum  | `clamp`         | Out-of-domain handling: `clamp`, `reflect` or `random`. Reflection bounces as many times as needed for coordinates that overshoot by more than the domain width. `random` isn't available on a domain with exactly one infinite end, and the field is ignored when both ends are infinite |
 
 ### GA fields
 
@@ -270,8 +274,8 @@ Fields that belong to the runner rather than to any algorithm.
 | Key        | Type  | Default | Description                                                    |
 |------------|-------|---------|----------------------------------------------------------------|
 | `pop_size` | int   | `30`    | Population size                                                |
-| `z`        | float | `0.03`  | Full re-init probability per slime, in `[0.0, 1.0]`            |
-| `bounds`   | enum  | `clamp` | Out-of-domain handling: `clamp`, `reflect`, `random` or `none` |
+| `z`        | float | `0.03`  | Full re-init probability per slime, in `[0.0, 1.0]`; a re-initialized slime is drawn from the init range |
+| `bounds`   | enum  | `clamp` | Out-of-domain handling: `clamp`, `reflect` or `random` (not on a domain with exactly one infinite end). Ignored when both ends are infinite |
 
 ## Dev environment
 
