@@ -38,6 +38,8 @@ static void sma_validate(void) {
   if (cfg.pop_size <= 0) die("pop_size must be positive");
   if (cfg.z < 0.0 || cfg.z > 1.0) die("z must be in [0.0, 1.0]");
   check_bounds_mode(cfg.bounds);
+  // positions, weights and fits of every slime share one buffer
+  check_fits_int(cfg.pop_size, 2LL * g_cfg.n_dims + 1, "pop_size x n_dims");
 }
 
 // --- Dump ---
@@ -93,9 +95,9 @@ static void print_pop(const double* positions, const double* fits, double DF) {
 static void sma_run(RunResult* out) {
   // Single slab for the three per-slime arrays, laid out end-to-end:
   // [ positions (pop_size*n) | weights (pop_size*n) | fits (pop_size) ]
-  double* slab  = xmalloc(cfg.pop_size * (2 * g_cfg.n_dims + 1) * sizeof(double));
-  double* Xb    = xmalloc(g_cfg.n_dims * sizeof(double));
-  FitIdx* order = xmalloc(cfg.pop_size * sizeof(FitIdx));
+  double* slab  = xmalloc((size_t) cfg.pop_size * (2 * g_cfg.n_dims + 1) * sizeof(double));
+  double* Xb    = xmalloc((size_t) g_cfg.n_dims * sizeof(double));
+  FitIdx* order = xmalloc((size_t) cfg.pop_size * sizeof(FitIdx));
 
   double* positions = slab;
   double* weights   = slab + cfg.pop_size * g_cfg.n_dims;
@@ -108,9 +110,10 @@ static void sma_run(RunResult* out) {
     fits[i] = evaluate(positions + i * g_cfg.n_dims);
   }
 
-  // DF / Xb track best-ever
-  double DF = g_cfg.direction == MINIMIZE ? DBL_MAX : -DBL_MAX;
-  for (int i = 0; i < cfg.pop_size; i++) {
+  // DF / Xb track best-ever, seeded from the first slime so they always hold a real one
+  double DF = fits[0];
+  memcpy(Xb, positions, g_cfg.n_dims * sizeof(double));
+  for (int i = 1; i < cfg.pop_size; i++) {
     if (is_better(fits[i], DF)) {
       DF = fits[i];
       memcpy(Xb, positions + i * g_cfg.n_dims, g_cfg.n_dims * sizeof(double));

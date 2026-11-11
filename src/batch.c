@@ -185,9 +185,10 @@ void run_batch(const Batch* batch) {
   double*    pos     = xmalloc(n_pos * sizeof(double));
   char*      done    = xcalloc((size_t) total, 1);
 
-  for (int j = 0, off = 0; j < total; j++) {
+  size_t off = 0;
+  for (int j = 0; j < total; j++) {
     results[j].pos  = pos + off;
-    off            += batch->runs[j / batch->replicates].cfg.n_dims;
+    off            += (size_t) batch->runs[j / batch->replicates].cfg.n_dims;
   }
 
   if (total == 1) {

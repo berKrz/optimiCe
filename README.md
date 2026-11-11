@@ -93,6 +93,8 @@ If you install it under a non-default prefix, point `pkg-config` at it when buil
 | `-o [PATH]` | `--output [PATH]` | Also write the results to a CSV file (see [Results file](#results-file)) |
 | `-h [ALG]`  | `--help [ALG]`    | General help, or algorithm-specific help if `ALG` is given               |
 
+Short options work in either case: `-F` is `-f`.
+
 ### Results file
 
 `-o` writes the results to a file as well as printing them; the terminal output doesn't change. Where the file goes depends on the path:
@@ -174,6 +176,7 @@ pbest_init = "position"
 - Keys are written exactly as listed in the tables below, with underscores.
 - Each key may appear only once per section. TOML rejects duplicates at parse time.
 - Values are typed: `int` fields take integers (`30`, not `30.0`), `float` fields take floats or integers (`5` is read as `5.0`), and `enum` / `name` fields take quoted strings (`"sphere"`).
+- `nan` is rejected, except in the optional float fields (`target_fitness`, `w_end`), where it means unset: a `[[run]]` can use it to turn off a value set in `[common]` or `[defaults.<algo>]`.
 - Unknown keys, wrongly typed values, and keys in the wrong section are hard errors at startup. Messages name the file, section, and key, and a run by its label, e.g. `Error at 'example.toml [[run]] pso-2' [swarm-size]: unknown key for algorithm 'pso'`. A run whose `algorithm` is missing or unknown has no label yet and is named by its position instead (`[[run]] #3`).
 - Range and cross-field checks run on each run's merged configuration, after the whole file is read: `domain_min < domain_max`, each fitness function's `n_dims` and domain requirements, and each algorithm's own constraints. A problem that comes from `[common]` is reported against the first run it affects.
 - Every check runs before the first job starts, so a configuration either runs completely or not at all.
@@ -225,12 +228,12 @@ Fields that belong to the runner rather than to any algorithm.
 | `seed`           | uint32 | generated  | Base seed; replicate `r` of every run uses `seed + r`. When omitted, one is generated and printed. `[common]` only |
 | `replicates`     | int    | `1`        | Number of times every run is repeated, each with its own seed. At least 1. `[common]` only                   |
 | `direction`      | enum   | `minimize` | `minimize` or `maximize`                                                                                     |
-| `n_dims`         | int    | `2`        | Number of dimensions                                                                                         |
+| `n_dims`         | int    | `2`        | Number of dimensions, at least 1                                                                             |
 | `iterations`     | int    | `100`      | Iteration budget, the hard cap on every run (generations, for GA)                                            |
 | `target_fitness` | float  | unset      | Stop early once the current best is at least as good as this value                                           |
 | `stagnation`     | int    | `0`        | Stop early after this many consecutive iterations without improving the best-ever; `0` disables it           |
-| `domain_min`     | float  | `-5.0`     | Lower bound of each dimension; with `bounds = "none"`, of the initialization range only                      |
-| `domain_max`     | float  | `5.0`      | Upper bound of each dimension; with `bounds = "none"`, of the initialization range only                      |
+| `domain_min`     | float  | `-5.0`     | Lower bound of each dimension; with `bounds = "none"`, of the initialization range only. Must be finite      |
+| `domain_max`     | float  | `5.0`      | Upper bound of each dimension; with `bounds = "none"`, of the initialization range only. Must be finite      |
 | `fitness`        | name   | `sphere`   | One of the eight benchmark functions listed above. Some have fixed `n_dims` or stricter domain bounds, enforced at startup |
 | `algorithm`      | name   | required   | `pso`, `ga` or `sma`. `[[run]]` only                                                                         |
 

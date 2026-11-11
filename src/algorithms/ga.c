@@ -37,7 +37,7 @@ static _Thread_local GaConfig cfg;
 
 static int words_per_ind(void) {
   int total_bits = g_cfg.n_dims * cfg.ind_size;
-  return (total_bits + 63) / 64;
+  return total_bits / 64 + (total_bits % 64 != 0);
 }
 
 static inline int bit_get(const uint64_t* ind, int i) {
@@ -143,6 +143,9 @@ static void validate_cut_points(void) {
 static void ga_validate(void) {
   if (cfg.pop_size < 2) die("pop_size must be >= 2");
   if (cfg.ind_size < 2 || cfg.ind_size > 63) die("ind_size must be in [2, 63]");
+  // Bits are indexed with ints, and so are the words of the whole population
+  check_fits_int(g_cfg.n_dims, cfg.ind_size, "n_dims x ind_size");
+  check_fits_int(cfg.pop_size, words_per_ind(), "pop_size x n_dims x ind_size");
   if (!(cfg.mutation_rate >= 0.0 && cfg.mutation_rate < 1.0))
     die("mutation_rate must be in [0.0, 1.0)");
   // tournament_size is ignored under other selections, so it's only checked when in use

@@ -1,5 +1,5 @@
-#include <float.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <math.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -54,6 +54,13 @@ void* xcalloc(size_t n, size_t size) {
   return p;
 }
 
+void check_fits_int(int count, long long per_item, const char* what) {
+  if (per_item <= INT_MAX && count <= INT_MAX / per_item) return;
+  char msg[128];
+  snprintf(msg, sizeof(msg), "%s is too large (at most %d elements per buffer)", what, INT_MAX);
+  die(msg);
+}
+
 void clear_screen(void) {
   printf("\033[2J\033[H");
   fflush(stdout);
@@ -86,7 +93,8 @@ void print_iteration_line(int iter, double best_fitness) {
 
 StopState stop_init(void) {
   return (StopState) {
-      .best   = g_cfg.direction == MINIMIZE ? DBL_MAX : -DBL_MAX,
+      // Nothing seen yet: worse than any fitness, an infinite one included
+      .best   = g_cfg.direction == MINIMIZE ? INFINITY : -INFINITY,
       .stale  = 0,
       .reason = STOP_NONE,
   };

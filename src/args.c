@@ -37,7 +37,9 @@ static void print_help_overview(void) {
       "  -d, --dump-config       Print the resolved configuration and exit\n"
       "  -o, --output [path]     Also write results as CSV: to a file, into a directory (path\n"
       "                          ending in /), or, without a path, to a generated name here\n"
-      "  -h, --help [ALG]        General help, or help for a specific algorithm\n");
+      "  -h, --help [ALG]        General help, or help for a specific algorithm\n"
+      "\n"
+      "Short options work in either case (-F is -f).\n");
   print_runner_fields();
   printf("\nAlgorithms:\n");
   for (int i = 0; algorithms[i]; i++) printf("  %s\n", algorithms[i]->name);
@@ -65,6 +67,17 @@ static void print_list(void) {
   for (int i = 0; algorithms[i]; i++) printf("%s\n", algorithms[i]->name);
 }
 
+// Dies naming the option getopt just rejected, the way the user wrote it: `arg` is the argument
+// it came from
+// A long option is quoted whole (optopt can't name it: it's 0 for an unknown one), a short one by
+// its letter, since it may sit in the middle of a cluster like -ix
+static noreturn void die_option(const char* problem, const char* arg) {
+  char msg[128];
+  if (!strncmp(arg, "--", 2)) snprintf(msg, sizeof(msg), "%s: %s", problem, arg);
+  else snprintf(msg, sizeof(msg), "%s: -%c", problem, optopt);
+  die(msg);
+}
+
 Batch parse_args(int argc, char** argv) {
   static const struct option long_options[] = {
       {"config",      required_argument, NULL, 'f'},
@@ -82,9 +95,11 @@ Batch parse_args(int argc, char** argv) {
   int         want_output = 0;
   const char* output_arg  = NULL;  // NULL with want_output: generate a name
 
+  // Short options are accepted in either case
+  // The leading ':' makes getopt return ':' for a missing argument, apart from '?' for the rest
   opterr = 0;
   int c;
-  while ((c = getopt_long(argc, argv, "f:F:iIlLdDo::O::hH", long_options, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, ":f:F:iIlLdDo::O::hH", long_options, NULL)) != -1) {
     switch (c) {
       case 'f':
       case 'F': config_path = optarg; break;
@@ -107,11 +122,8 @@ Batch parse_args(int argc, char** argv) {
       case 'h':
       case 'H': want_help = 1; break;
 
-      default: {
-        char msg[64];
-        snprintf(msg, sizeof(msg), "invalid option: -%c", optopt);
-        die(msg);
-      }
+      case ':': die_option("missing argument for option", argv[optind - 1]);
+      default:  die_option("invalid option", argv[optind - 1]);
     }
   }
 

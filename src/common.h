@@ -73,6 +73,11 @@ noreturn void die_at(const char* source, const char* key, const char* msg);
 void* xmalloc(size_t size);
 void* xcalloc(size_t n, size_t size);
 
+// Dies unless count x per_item fits in an int. Algorithms index their flat buffers with ints, so
+// each one's validate checks its largest buffer here; `what` names the product in the message,
+// e.g. "swarm_size x n_dims". Both factors must be positive
+void check_fits_int(int count, long long per_item, const char* what);
+
 void clear_screen(void);
 void wait_for_enter(void);
 void print_separator(void);

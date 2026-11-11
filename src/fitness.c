@@ -80,6 +80,9 @@ static double schaffer_f6(const double* pos) {
 // config.c's "fitness" handler resolves a name to its entry, which g_cfg.fitness then points at;
 // validate() enforces the entry's preconditions on g_cfg, and dump_config() prints its name.
 //
+// A function must not return NaN for finite coordinates: nothing compares better or worse than
+// NaN, so the algorithms' best tracking relies on it. Overflowing to an infinity is fine
+//
 // n_dims_min & n_dims_max: 0 means unbounded on that side.
 // domain_lo & domain_hi:   -/+INFINITY mean unbounded on that side.
 const FitnessEntry fitness_table[] = {

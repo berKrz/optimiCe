@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <limits.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -30,6 +31,23 @@ int find_algorithm(const char* name) {
 
 // --- set_field: the single write path shared by walker and defaults ---
 
+// A "nan" default marks an optional float: NaN means unset, and is resolved after parsing if at
+// all (e.g. pso's w_end = w). Only these fields accept nan, from a default or from the file, where
+// it turns the field back off in a [[run]]
+static int is_optional(const FieldSpec* row) {
+  return row->default_display && strcmp(row->default_display, "nan") == 0;
+}
+
+// The number in a float or integer datum; dies on any other type, and on nan
+static double number_of(const char* source, const FieldSpec* row, toml_datum_t d, int allow_nan) {
+  double v;
+  if (d.type == TOML_FP64) v = d.u.fp64;
+  else if (d.type == TOML_INT64) v = (double) d.u.int64;
+  else die_at(source, row->name, "expected a number");
+  if (isnan(v) && !allow_nan) die_at(source, row->name, "nan is not a valid value");
+  return v;
+}
+
 static void set_field(const char* source, const FieldSpec* row, void* base, toml_datum_t d) {
   uint8_t* target = (uint8_t*) base + row->offset;
   switch (row->type) {
@@ -46,9 +64,7 @@ static void set_field(const char* source, const FieldSpec* row, void* base, toml
       return;
     }
     case FIELD_DOUBLE: {
-      if (d.type == TOML_FP64) *(double*) target = d.u.fp64;
-      else if (d.type == TOML_INT64) *(double*) target = (double) d.u.int64;
-      else die_at(source, row->name, "expected floating-point number");
+      *(double*) target = number_of(source, row, d, is_optional(row));
       return;
     }
     case FIELD_BOOL: {
@@ -93,12 +109,7 @@ static void set_field(const char* source, const FieldSpec* row, void* base, toml
       }
       // Fill a local copy first so a bad element leaves the target untouched
       DoubleList list = {.n = d.u.arr.size};
-      for (int i = 0; i < list.n; i++) {
-        toml_datum_t e = d.u.arr.elem[i];
-        if (e.type == TOML_FP64) list.v[i] = e.u.fp64;
-        else if (e.type == TOML_INT64) list.v[i] = (double) e.u.int64;
-        else die_at(source, row->name, "expected array of numbers");
-      }
+      for (int i = 0; i < list.n; i++) list.v[i] = number_of(source, row, d.u.arr.elem[i], 0);
       memcpy(target, &list, sizeof(list));
       return;
     }
@@ -301,8 +312,7 @@ static const char* type_label(FieldType t) {
 }
 
 static const char* get_default_display(const FieldSpec* f) {
-  // A "nan" default marks an optional float that's resolved after parsing (e.g. w_end = w)
-  if (f->default_display && strcmp(f->default_display, "nan") == 0) return "(unset)";
+  if (is_optional(f)) return "(unset)";
   if (f->default_display) return f->default_display;
   if (strcmp(f->name, "algorithm") == 0) return "(required)";
   if (strcmp(f->name, "seed") == 0) return "(generated)";
@@ -321,7 +331,14 @@ void print_help_from_table(const FieldSpec* table, unsigned scope) {
 
 void validate(void) {
   if (!g_cfg.algorithm) die("algorithm not set in config file");
+  if (g_cfg.n_dims < 1) die("n_dims must be at least 1");
+  // The domain is what every uniform draw samples from, so it has to be finite, and so does its
+  // width: two finite bounds can still be too far apart to subtract
+  if (!isfinite(g_cfg.domain_min) || !isfinite(g_cfg.domain_max))
+    die("domain_min and domain_max must be finite");
   if (g_cfg.domain_min >= g_cfg.domain_max) die("domain_min must be strictly less than domain_max");
+  if (!isfinite(g_cfg.domain_max - g_cfg.domain_min))
+    die("the domain is too wide: domain_max - domain_min must be finite");
   if (g_cfg.iterations < 1) die("iterations must be positive");
   if (g_cfg.stagnation < 0) die("stagnation must be non-negative (0 disables it)");
 

@@ -1,4 +1,4 @@
-CC         = gcc
+# CC is left to make's default (cc): override it with `make CC=clang` or from the environment
 PKG_CONFIG ?= pkg-config
 
 # tomlc17 ships a pkg-config file (libtomlc17.pc). Fall back to a bare -ltomlc17
@@ -6,9 +6,12 @@ PKG_CONFIG ?= pkg-config
 TOML_CFLAGS := $(shell $(PKG_CONFIG) --cflags libtomlc17 2>/dev/null)
 TOML_LIBS   := $(shell $(PKG_CONFIG) --libs   libtomlc17 2>/dev/null || echo -ltomlc17)
 
-CFLAGS = -Wall -Wextra -std=c11 -pthread -I$(SRCDIR) -g -D_GNU_SOURCE -MMD -MP \
-         -finput-charset=UTF-8 -fexec-charset=UTF-8 $(TOML_CFLAGS)
-LDLIBS = -lm $(TOML_LIBS)
+# CFLAGS is the part meant to be overridden (`make CFLAGS="-O0 -g"`); BUILD_FLAGS is what the
+# build needs whatever CFLAGS says
+CFLAGS      ?= -O2 -g -Wall -Wextra
+BUILD_FLAGS  = -std=c11 -pthread -I$(SRCDIR) -D_GNU_SOURCE -MMD -MP \
+               -finput-charset=UTF-8 -fexec-charset=UTF-8 $(TOML_CFLAGS)
+LDLIBS       = -lm $(TOML_LIBS)
 
 TARGET = optimice
 SRCDIR = src
@@ -45,10 +48,10 @@ $(SRCDIR)/version.h: FORCE
 $(SRCDIR)/output.o: $(SRCDIR)/version.h
 
 $(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(BUILD_FLAGS) $(CFLAGS) -o $@ $^ $(LDLIBS)
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(BUILD_FLAGS) $(CFLAGS) -c -o $@ $<
 
 clean:
 	rm -f $(OBJ) $(DEP) $(TARGET) $(SRCDIR)/version.h

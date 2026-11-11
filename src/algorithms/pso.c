@@ -1,4 +1,3 @@
-#include <float.h>
 #include <math.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -74,6 +73,8 @@ static void pso_validate(void) {
   if (cfg.c1 < 0.0) die("c1 must be non-negative");
   if (cfg.c2 < 0.0) die("c2 must be non-negative");
   check_bounds_mode(cfg.bounds);
+  // pos, vel and pbest of every particle share one buffer
+  check_fits_int(cfg.swarm_size, 3LL * g_cfg.n_dims, "swarm_size x n_dims");
 }
 
 // --- Dump ---
@@ -112,10 +113,15 @@ static void copy_pos(double* dst, const double* src) {
   for (int d = 0; d < g_cfg.n_dims; d++) dst[d] = src[d];
 }
 
+static void update_gbest(const Particle* p, double* gbest_pos, double* gbest_fitness) {
+  if (is_better(p->pbest_fitness, *gbest_fitness)) {
+    *gbest_fitness = p->pbest_fitness;
+    copy_pos(gbest_pos, p->pbest);
+  }
+}
+
 static void init_swarm(Particle* swarm, double* data, double* gbest_pos, double* gbest_fitness) {
   int per_particle = 3 * g_cfg.n_dims;
-
-  *gbest_fitness = g_cfg.direction == MINIMIZE ? DBL_MAX : -DBL_MAX;
 
   for (int i = 0; i < cfg.swarm_size; i++) {
     double* slot           = data + i * per_particle;
@@ -139,12 +145,12 @@ static void init_swarm(Particle* swarm, double* data, double* gbest_pos, double*
         swarm[i].pbest[d] = rng_next_double_range(g_cfg.domain_min, g_cfg.domain_max);
       swarm[i].pbest_fitness = evaluate(swarm[i].pbest);
     }
-
-    if (is_better(swarm[i].pbest_fitness, *gbest_fitness)) {
-      *gbest_fitness = swarm[i].pbest_fitness;
-      copy_pos(gbest_pos, swarm[i].pbest);
-    }
   }
+
+  // The first particle seeds gbest, so gbest is always some particle's pbest, never a placeholder
+  *gbest_fitness = swarm[0].pbest_fitness;
+  copy_pos(gbest_pos, swarm[0].pbest);
+  for (int i = 1; i < cfg.swarm_size; i++) update_gbest(&swarm[i], gbest_pos, gbest_fitness);
 }
 
 // Inertia for iteration `iter` (0-based): linear from w at the first iteration to w_end at the
@@ -153,13 +159,6 @@ static void init_swarm(Particle* swarm, double* data, double* gbest_pos, double*
 static double inertia(int iter) {
   double frac = g_cfg.iterations > 1 ? (double) iter / (g_cfg.iterations - 1) : 0.0;
   return cfg.w + (cfg.w_end - cfg.w) * frac;
-}
-
-static void update_gbest(const Particle* p, double* gbest_pos, double* gbest_fitness) {
-  if (is_better(p->pbest_fitness, *gbest_fitness)) {
-    *gbest_fitness = p->pbest_fitness;
-    copy_pos(gbest_pos, p->pbest);
-  }
 }
 
 static void update_swarm(Particle* swarm, double* gbest_pos, double* gbest_fitness, double w) {
@@ -234,9 +233,9 @@ static void print_swarm(const Particle* swarm, double gbest_fitness) {
 static void pso_run(RunResult* out) {
   int per_particle = 3 * g_cfg.n_dims;
 
-  double*   data      = xmalloc(cfg.swarm_size * per_particle * sizeof(double));
-  Particle* swarm     = xmalloc(cfg.swarm_size * sizeof(Particle));
-  double*   gbest_pos = xmalloc(g_cfg.n_dims * sizeof(double));
+  double*   data      = xmalloc((size_t) cfg.swarm_size * per_particle * sizeof(double));
+  Particle* swarm     = xmalloc((size_t) cfg.swarm_size * sizeof(Particle));
+  double*   gbest_pos = xmalloc((size_t) g_cfg.n_dims * sizeof(double));
   double    gbest_fitness;
 
   init_swarm(swarm, data, gbest_pos, &gbest_fitness);
