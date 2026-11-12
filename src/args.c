@@ -58,9 +58,7 @@ static void print_help_algorithm(const char* name) {
       return;
     }
   }
-  char msg[128];
-  snprintf(msg, sizeof(msg), "unknown algorithm: '%s'", name);
-  die(msg);
+  die_with_hint("unknown algorithm: '%s'", name);
 }
 
 static void print_list(void) {
@@ -72,10 +70,8 @@ static void print_list(void) {
 // A long option is quoted whole (optopt can't name it: it's 0 for an unknown one), a short one by
 // its letter, since it may sit in the middle of a cluster like -ix
 static noreturn void die_option(const char* problem, const char* arg) {
-  char msg[128];
-  if (!strncmp(arg, "--", 2)) snprintf(msg, sizeof(msg), "%s: %s", problem, arg);
-  else snprintf(msg, sizeof(msg), "%s: -%c", problem, optopt);
-  die(msg);
+  if (strncmp(arg, "--", 2) == 0) die_with_hint("%s: %s", problem, arg);
+  die_with_hint("%s: -%c", problem, optopt);
 }
 
 Batch parse_args(int argc, char** argv) {
@@ -133,21 +129,17 @@ Batch parse_args(int argc, char** argv) {
     exit(EXIT_SUCCESS);
   }
 
-  if (optind < argc) die("unexpected argument");
-  if (!config_path) die("--config / -f is required");
+  if (optind < argc) die_with_hint("unexpected argument");
+  if (!config_path) die_with_hint("--config / -f is required");
 
   Batch batch = load_batch(config_path);
   int   jobs  = batch_jobs(&batch);
 
   // Checked before the dump: --dump-config only prints configs that would run
-  if (g_opts.interactive && jobs > 1) {
-    char msg[160];
-    snprintf(msg, sizeof(msg),
-             "--interactive needs a single job (got %d run%s x %d replicate%s = %d)", batch.n_runs,
-             batch.n_runs == 1 ? "" : "s", batch.replicates, batch.replicates == 1 ? "" : "s",
-             jobs);
-    die(msg);
-  }
+  if (g_opts.interactive && jobs > 1)
+    die_with_hint("--interactive needs a single job (got %d run%s x %d replicate%s = %d)",
+                  batch.n_runs, batch.n_runs == 1 ? "" : "s", batch.replicates,
+                  batch.replicates == 1 ? "" : "s", jobs);
   g_opts.per_iteration = jobs == 1;
 
   if (want_config) {

@@ -23,11 +23,7 @@ static int n_registered(void) {
 
 Batch load_batch(const char* filename) {
   toml_result_t result = toml_parse_file_ex(filename);
-  if (!result.ok) {
-    char msg[512];
-    snprintf(msg, sizeof(msg), "parse error in '%s': %s", filename, result.errmsg);
-    die(msg);
-  }
+  if (!result.ok) die_with_hint("parse error in '%s': %s", filename, result.errmsg);
 
   // TOML parsers reject duplicate keys within a table at parse time
 

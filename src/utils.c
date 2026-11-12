@@ -1,6 +1,7 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <math.h>
+#include <stdarg.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,20 +27,37 @@ static void claim_exit(void) {
     for (;;) pause();
 }
 
-void die(const char* msg) {
+// The one exit path behind the die family: "Error[ at '<source>'[ [<key>]]]: <message>", then
+// the --help hint when asked for
+static noreturn void die_va(const char* source, const char* key, int hint, const char* fmt,
+                            va_list args) {
   claim_exit();
-  if (g_where) fprintf(stderr, "Error at '%s': %s\n", g_where, msg);
-  else fprintf(stderr, "Error: %s\n", msg);
-  fprintf(stderr, "Run with --help to see available options.\n");
+  fprintf(stderr, "Error");
+  if (source) fprintf(stderr, " at '%s'", source);
+  if (key) fprintf(stderr, " [%s]", key);
+  fprintf(stderr, ": ");
+  vfprintf(stderr, fmt, args);
+  fprintf(stderr, "\n");
+  if (hint) fprintf(stderr, "Run with --help to see available options.\n");
   exit(EXIT_FAILURE);
 }
 
-void die_at(const char* source, const char* key, const char* msg) {
-  claim_exit();
-  if (key) fprintf(stderr, "Error at '%s' [%s]: %s\n", source, key, msg);
-  else fprintf(stderr, "Error at '%s': %s\n", source, msg);
-  fprintf(stderr, "Run with --help to see available options.\n");
-  exit(EXIT_FAILURE);
+void die(const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  die_va(g_where, NULL, 0, fmt, args);
+}
+
+void die_with_hint(const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  die_va(g_where, NULL, 1, fmt, args);
+}
+
+void die_at(const char* source, const char* key, const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  die_va(source, key, 1, fmt, args);
 }
 
 void* xmalloc(size_t size) {
@@ -56,9 +74,7 @@ void* xcalloc(size_t n, size_t size) {
 
 void check_fits_int(int count, long long per_item, const char* what) {
   if (per_item <= INT_MAX && count <= INT_MAX / per_item) return;
-  char msg[128];
-  snprintf(msg, sizeof(msg), "%s is too large (at most %d elements per buffer)", what, INT_MAX);
-  die(msg);
+  die_with_hint("%s is too large (at most %d elements per buffer)", what, INT_MAX);
 }
 
 void clear_screen(void) {

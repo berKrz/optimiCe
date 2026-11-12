@@ -113,31 +113,19 @@ static int cut_index(double r) { return (int) (cfg.ind_size * r); }
 // Either way the user would silently get fewer cuts than asked for
 static void validate_cut_points(void) {
   const DoubleList* c = &cfg.cut_points;
-  char              msg[192];
-  if (c->n < 1) die("cut_points must have at least one element");
+  if (c->n < 1) die_with_hint("cut_points must have at least one element");
   for (int i = 0; i < c->n; i++) {
-    if (!(c->v[i] > 0.0 && c->v[i] < 1.0)) {
-      snprintf(msg, sizeof(msg), "cut_points[%d] = %g must be in (0.0, 1.0)", i, c->v[i]);
-      die(msg);
-    }
-    if (i > 0 && !(c->v[i] > c->v[i - 1])) {
-      snprintf(msg, sizeof(msg), "cut_points must be strictly increasing (%g after %g)", c->v[i],
-               c->v[i - 1]);
-      die(msg);
-    }
+    if (!(c->v[i] > 0.0 && c->v[i] < 1.0))
+      die_with_hint("cut_points[%d] = %g must be in (0.0, 1.0)", i, c->v[i]);
+    if (i > 0 && !(c->v[i] > c->v[i - 1]))
+      die_with_hint("cut_points must be strictly increasing (%g after %g)", c->v[i], c->v[i - 1]);
     int idx = cut_index(c->v[i]);
-    if (idx < 1) {
-      snprintf(msg, sizeof(msg),
-               "cut_points[%d] = %g lands on bit 0 with ind_size = %d (needs >= %g)", i, c->v[i],
-               cfg.ind_size, 1.0 / cfg.ind_size);
-      die(msg);
-    }
-    if (i > 0 && idx == cut_index(c->v[i - 1])) {
-      snprintf(msg, sizeof(msg),
-               "cut_points %g and %g land on the same bit (%d) with ind_size = %d", c->v[i - 1],
-               c->v[i], idx, cfg.ind_size);
-      die(msg);
-    }
+    if (idx < 1)
+      die_with_hint("cut_points[%d] = %g lands on bit 0 with ind_size = %d (needs >= %g)", i,
+                    c->v[i], cfg.ind_size, 1.0 / cfg.ind_size);
+    if (i > 0 && idx == cut_index(c->v[i - 1]))
+      die_with_hint("cut_points %g and %g land on the same bit (%d) with ind_size = %d",
+                    c->v[i - 1], c->v[i], idx, cfg.ind_size);
   }
 }
 
@@ -182,33 +170,30 @@ static int init_levels(uint64_t* lo, uint64_t* hi) {
 }
 
 static void ga_validate(void) {
-  if (cfg.pop_size < 2) die("pop_size must be >= 2");
-  if (cfg.ind_size < 2 || cfg.ind_size > 63) die("ind_size must be in [2, 63]");
+  if (cfg.pop_size < 2) die_with_hint("pop_size must be >= 2");
+  if (cfg.ind_size < 2 || cfg.ind_size > 63) die_with_hint("ind_size must be in [2, 63]");
   if (!isfinite(g_cfg.domain_min) || !isfinite(g_cfg.domain_max))
-    die("ga needs a finite domain: its bits decode onto [domain_min, domain_max]");
+    die_with_hint("ga needs a finite domain: its bits decode onto [domain_min, domain_max]");
   // Bits are indexed with ints, and so are the words of the whole population
   check_fits_int(g_cfg.n_dims, cfg.ind_size, "n_dims x ind_size");
   check_fits_int(cfg.pop_size, words_per_ind(), "pop_size x n_dims x ind_size");
   uint64_t lo, hi;
-  if (!init_levels(&lo, &hi)) die("the init range holds no value that ind_size bits can represent");
+  if (!init_levels(&lo, &hi))
+    die_with_hint("the init range holds no value that ind_size bits can represent");
   if (!(cfg.mutation_rate >= 0.0 && cfg.mutation_rate < 1.0))
-    die("mutation_rate must be in [0.0, 1.0)");
+    die_with_hint("mutation_rate must be in [0.0, 1.0)");
   // tournament_size is ignored under other selections, so it's only checked when in use
   if (cfg.selection == TOURNAMENT) {
-    if (cfg.tournament_size < 2) die("tournament_size must be >= 2");
-    if (cfg.tournament_size > cfg.pop_size) {
-      char msg[160];
-      snprintf(msg, sizeof(msg),
-               "tournament_size must be at most pop_size (pop_size=%d, tournament_size=%d)",
-               cfg.pop_size, cfg.tournament_size);
-      die(msg);
-    }
+    if (cfg.tournament_size < 2) die_with_hint("tournament_size must be >= 2");
+    if (cfg.tournament_size > cfg.pop_size)
+      die_with_hint("tournament_size must be at most pop_size (pop_size=%d, tournament_size=%d)",
+                    cfg.pop_size, cfg.tournament_size);
   }
   // cut_points is only checked when in use
   if (cfg.crossover == XOVER_N_POINT) validate_cut_points();
   // rank_pressure is only checked when in use
   if (cfg.selection == RANK && !(cfg.rank_pressure >= 1.0 && cfg.rank_pressure <= 2.0))
-    die("rank_pressure must be in [1.0, 2.0]");
+    die_with_hint("rank_pressure must be in [1.0, 2.0]");
 }
 
 // --- Dump ---

@@ -71,6 +71,6 @@ void apply_bounds(double* x, double* v, BoundsMode mode) {
 
 void check_bounds_mode(BoundsMode mode) {
   if (mode == BOUNDS_RANDOM && isfinite(g_cfg.domain_min) != isfinite(g_cfg.domain_max))
-    die("bounds = random needs a domain that is finite, or unbounded on both sides: there is no "
-        "uniform draw from a half-bounded one");
+    die_with_hint("bounds = random needs a domain that is finite, or unbounded on both sides: "
+                  "there is no uniform draw from a half-bounded one");
 }

@@ -102,11 +102,8 @@ static void set_field(const char* source, const FieldSpec* row, void* base, toml
       die("internal: FIELD_ALGORITHM reached set_field");
     case FIELD_DOUBLE_LIST: {
       if (d.type != TOML_ARRAY) die_at(source, row->name, "expected array of numbers");
-      if (d.u.arr.size > DOUBLE_LIST_MAX) {
-        char msg[64];
-        snprintf(msg, sizeof(msg), "too many elements (max %d)", DOUBLE_LIST_MAX);
-        die_at(source, row->name, msg);
-      }
+      if (d.u.arr.size > DOUBLE_LIST_MAX)
+        die_at(source, row->name, "too many elements (max %d)", DOUBLE_LIST_MAX);
       // Fill a local copy first so a bad element leaves the target untouched
       DoubleList list = {.n = d.u.arr.size};
       for (int i = 0; i < list.n; i++) list.v[i] = number_of(source, row, d.u.arr.elem[i], 0);
@@ -197,18 +194,13 @@ void scope_text(unsigned scope, char* buf, size_t size) {
 
 // Unknown-key error, with a hint when the key exists somewhere else
 static void die_unknown(const char* source, const char* key, const Algorithm* algo) {
-  char msg[192];
-  if (algo) {
-    snprintf(msg, sizeof(msg), "unknown key for algorithm '%s'", algo->name);
-    die_at(source, key, msg);
-  }
+  if (algo) die_at(source, key, "unknown key for algorithm '%s'", algo->name);
   for (int i = 0; algorithms[i]; i++) {
     if (find_row(algorithms[i]->fields, key)) {
       char where[64];
       scope_text(SCOPE_ALGO, where, sizeof(where));
-      snprintf(msg, sizeof(msg), "'%s' is a field of algorithm '%s'; algorithm fields go in %s",
-               key, algorithms[i]->name, where);
-      die_at(source, key, msg);
+      die_at(source, key, "'%s' is a field of algorithm '%s'; algorithm fields go in %s", key,
+             algorithms[i]->name, where);
     }
   }
   die_at(source, key, "unknown key");
@@ -230,10 +222,9 @@ void walk_section(const char* source, Section section, toml_datum_t tab, const A
     if (!row) die_unknown(source, key, algo);
 
     if (!(row->scope & section)) {
-      char where[64], msg[96];
+      char where[64];
       scope_text(row->scope, where, sizeof(where));
-      snprintf(msg, sizeof(msg), "only allowed in %s", where);
-      die_at(source, key, msg);
+      die_at(source, key, "only allowed in %s", where);
     }
 
     if (row->type == FIELD_ALGORITHM) continue;  // resolved by toml.c's pre-pass
@@ -334,55 +325,50 @@ void print_help_from_table(const FieldSpec* table, unsigned scope) {
 // --- Validation ---
 
 void validate(void) {
-  if (!g_cfg.algorithm) die("algorithm not set in config file");
-  if (g_cfg.n_dims < 1) die("n_dims must be at least 1");
+  if (!g_cfg.algorithm) die_with_hint("algorithm not set in config file");
+  if (g_cfg.n_dims < 1) die_with_hint("n_dims must be at least 1");
   // Either end of the domain may be infinite: the search is unbounded on that side
   // Two finite ends can still be too far apart to subtract
-  if (g_cfg.domain_min >= g_cfg.domain_max) die("domain_min must be strictly less than domain_max");
+  if (g_cfg.domain_min >= g_cfg.domain_max)
+    die_with_hint("domain_min must be strictly less than domain_max");
   if (isfinite(g_cfg.domain_min) && isfinite(g_cfg.domain_max) &&
       !isfinite(g_cfg.domain_max - g_cfg.domain_min))
-    die("the domain is too wide: domain_max - domain_min must be finite");
+    die_with_hint("the domain is too wide: domain_max - domain_min must be finite");
 
   // Not a check: an unset end of the init range is the domain's, resolved here so dump and run
   // see it. An infinite end of the domain can't stand in: the init range is what uniform draws
   // sample from, so it has to be finite, and so does its width
   if (isnan(g_cfg.init_min)) {
-    if (isinf(g_cfg.domain_min)) die("domain_min is infinite, so init_min must be set");
+    if (isinf(g_cfg.domain_min)) die_with_hint("domain_min is infinite, so init_min must be set");
     g_cfg.init_min = g_cfg.domain_min;
   }
   if (isnan(g_cfg.init_max)) {
-    if (isinf(g_cfg.domain_max)) die("domain_max is infinite, so init_max must be set");
+    if (isinf(g_cfg.domain_max)) die_with_hint("domain_max is infinite, so init_max must be set");
     g_cfg.init_max = g_cfg.domain_max;
   }
   if (!isfinite(g_cfg.init_min) || !isfinite(g_cfg.init_max))
-    die("init_min and init_max must be finite");
-  if (g_cfg.init_min >= g_cfg.init_max) die("init_min must be less than init_max");
+    die_with_hint("init_min and init_max must be finite");
+  if (g_cfg.init_min >= g_cfg.init_max)
+    die_with_hint("init_min must be strictly less than init_max");
   if (!isfinite(g_cfg.init_max - g_cfg.init_min))
-    die("the init range is too wide: init_max - init_min must be finite");
+    die_with_hint("the init range is too wide: init_max - init_min must be finite");
   if (g_cfg.init_min < g_cfg.domain_min || g_cfg.init_max > g_cfg.domain_max)
-    die("the init range must be inside the domain");
+    die_with_hint("the init range must be inside the domain");
 
-  if (g_cfg.iterations < 1) die("iterations must be positive");
-  if (g_cfg.stagnation < 0) die("stagnation must be non-negative (0 disables it)");
+  if (g_cfg.iterations < 1) die_with_hint("iterations must be positive");
+  if (g_cfg.stagnation < 0) die_with_hint("stagnation must be non-negative (0 disables it)");
 
   const FitnessEntry* fe = g_cfg.fitness;  // set_field resolved it, or the default did
-  char                msg[256];
 
-  if (fe->n_dims_min && g_cfg.n_dims < fe->n_dims_min) {
-    snprintf(msg, sizeof(msg), "for %s, n_dims must be at least %d (current: %d)", fe->name,
-             fe->n_dims_min, g_cfg.n_dims);
-    die(msg);
-  }
-  if (fe->n_dims_max && g_cfg.n_dims > fe->n_dims_max) {
-    snprintf(msg, sizeof(msg), "for %s, n_dims must be at most %d (current: %d)", fe->name,
-             fe->n_dims_max, g_cfg.n_dims);
-    die(msg);
-  }
-  if (g_cfg.domain_min < fe->domain_lo || g_cfg.domain_max > fe->domain_hi) {
-    snprintf(msg, sizeof(msg), "for %s, the domain must be contained in [%g, %g]", fe->name,
-             fe->domain_lo, fe->domain_hi);
-    die(msg);
-  }
+  if (fe->n_dims_min && g_cfg.n_dims < fe->n_dims_min)
+    die_with_hint("for %s, n_dims must be at least %d (current: %d)", fe->name, fe->n_dims_min,
+                  g_cfg.n_dims);
+  if (fe->n_dims_max && g_cfg.n_dims > fe->n_dims_max)
+    die_with_hint("for %s, n_dims must be at most %d (current: %d)", fe->name, fe->n_dims_max,
+                  g_cfg.n_dims);
+  if (g_cfg.domain_min < fe->domain_lo || g_cfg.domain_max > fe->domain_hi)
+    die_with_hint("for %s, the domain must be contained in [%g, %g]", fe->name, fe->domain_lo,
+                  fe->domain_hi);
 
   if (g_cfg.algorithm->validate) g_cfg.algorithm->validate();
 }

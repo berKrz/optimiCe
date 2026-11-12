@@ -36,8 +36,8 @@ static void* sma_cfg_base(void) { return &cfg; }
 // --- Validate ---
 
 static void sma_validate(void) {
-  if (cfg.pop_size <= 0) die("pop_size must be positive");
-  if (cfg.z < 0.0 || cfg.z > 1.0) die("z must be in [0.0, 1.0]");
+  if (cfg.pop_size <= 0) die_with_hint("pop_size must be positive");
+  if (cfg.z < 0.0 || cfg.z > 1.0) die_with_hint("z must be in [0.0, 1.0]");
   check_bounds_mode(cfg.bounds);
   // positions, weights and fits of every slime share one buffer
   check_fits_int(cfg.pop_size, 2LL * g_cfg.n_dims + 1, "pop_size x n_dims");

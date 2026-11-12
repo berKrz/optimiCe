@@ -17,9 +17,7 @@ static FILE* out;
 static char* out_path;
 
 static noreturn void die_errno(const char* what, const char* path) {
-  char msg[512];
-  snprintf(msg, sizeof(msg), "%s '%s': %s", what, path, strerror(errno));
-  die(msg);
+  die("%s '%s': %s", what, path, strerror(errno));
 }
 
 // --- Paths ---
@@ -71,11 +69,7 @@ static FILE* open_generated(const char* dir, const char* config_path, const stru
     f = fopen(out_path, "wx");
     if (!f && errno != EEXIST) die_errno("cannot create", out_path);
   }
-  if (!f) {
-    char msg[512];
-    snprintf(msg, sizeof(msg), "cannot create '%s': names up to -99 are already taken", out_path);
-    die(msg);
-  }
+  if (!f) die("cannot create '%s': names up to -99 are already taken", out_path);
   free(stem);
   return f;
 }
@@ -112,7 +106,7 @@ static void cksum_file(const char* path, uint32_t* crc_out, uint64_t* len_out) {
 // --- Open / close ---
 
 void output_open(const Batch* batch, const char* config_path, const char* arg) {
-  if (arg && !*arg) die("--output was given an empty path");
+  if (arg && !*arg) die_with_hint("--output was given an empty path");
   time_t    t = time(NULL);
   struct tm now;
   localtime_r(&t, &now);

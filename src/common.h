@@ -41,9 +41,9 @@ typedef struct {
 
 extern Options g_opts;
 
-// When set, die() reports it as the error's location: the run being validated during loading, or
-// the job a thread is running. Thread-local, so each thread names its own job
-// Whoever sets it clears it before the buffer it points to goes away, so a later die() never reads
+// When set, die and die_with_hint report it as the error's location: the run being validated
+// during loading, or the job a thread is running. Thread-local, so each thread names its own job
+// Whoever sets it clears it before the buffer it points to goes away, so a later die never reads
 // a stale or dangling location
 extern _Thread_local const char* g_where;
 
@@ -68,8 +68,15 @@ typedef struct {
 #define LINE_WIDTH 50
 
 // utils.c
-noreturn void die(const char* msg);
-noreturn void die_at(const char* source, const char* key, const char* msg);
+// The die family takes a printf-style format, checked against its arguments by the compiler
+#define PRINTF_LIKE(fmt, args) __attribute__((format(printf, fmt, args)))
+
+// die is for failures while running (out of memory, a file that can't be written) and for
+// internal errors. die_with_hint and die_at are for what the user wrote, in the config file or
+// on the command line: they add a line pointing at --help
+noreturn void die(const char* fmt, ...) PRINTF_LIKE(1, 2);
+noreturn void die_with_hint(const char* fmt, ...) PRINTF_LIKE(1, 2);
+noreturn void die_at(const char* source, const char* key, const char* fmt, ...) PRINTF_LIKE(3, 4);
 
 // malloc / calloc that die on failure
 void* xmalloc(size_t size);

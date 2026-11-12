@@ -66,14 +66,14 @@ static void* pso_cfg_base(void) { return &cfg; }
 // --- Validation ---
 
 static void pso_validate(void) {
-  if (cfg.swarm_size <= 0) die("swarm_size must be positive");
-  if (cfg.w < 0.0) die("w must be non-negative");
+  if (cfg.swarm_size <= 0) die_with_hint("swarm_size must be positive");
+  if (cfg.w < 0.0) die_with_hint("w must be non-negative");
   // Not a check: an unset w_end means constant inertia, resolved here so dump and run see it
   if (isnan(cfg.w_end)) cfg.w_end = cfg.w;
-  if (cfg.w_end < 0.0) die("w_end must be non-negative");
-  if (cfg.v_max < 0.0) die("v_max must be non-negative (0 disables the cap)");
-  if (cfg.c1 < 0.0) die("c1 must be non-negative");
-  if (cfg.c2 < 0.0) die("c2 must be non-negative");
+  if (cfg.w_end < 0.0) die_with_hint("w_end must be non-negative");
+  if (cfg.v_max < 0.0) die_with_hint("v_max must be non-negative (0 disables the cap)");
+  if (cfg.c1 < 0.0) die_with_hint("c1 must be non-negative");
+  if (cfg.c2 < 0.0) die_with_hint("c2 must be non-negative");
   check_bounds_mode(cfg.bounds);
   // pos, vel and pbest of every particle share one buffer
   check_fits_int(cfg.swarm_size, 3LL * g_cfg.n_dims, "swarm_size x n_dims");
