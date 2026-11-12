@@ -6,7 +6,7 @@
 
 typedef struct Algorithm    Algorithm;     // defined in algorithms.h
 typedef struct FieldSpec    FieldSpec;     // defined in algorithms.h
-typedef struct FitnessEntry FitnessEntry;  // defined below, with fitness.c
+typedef struct FitnessEntry FitnessEntry;  // opaque: defined in fitness.c
 
 typedef enum { MINIMIZE, MAXIMIZE } OptDirection;
 
@@ -170,23 +170,18 @@ void free_batch(Batch* ex);
 Batch parse_args(int argc, char** argv);
 
 // fitness.c
-// evaluate is the only way an algorithm calls the fitness function: it calls g_cfg.fitness->fn
-// and counts the call on this thread. Every call counts, so the count is the run's cost only if
-// algorithms never re-evaluate a solution whose fitness they already know, and never evaluate to
-// print (otherwise --interactive would change it)
+// evaluate is the only way to call the run's fitness function (g_cfg.fitness), and it counts the
+// call on this thread: the functions, and the catalog entries that point at them, are private to
+// fitness.c. Every call counts, so the count is the run's cost only if algorithms never
+// re-evaluate a solution whose fitness they already know, and never evaluate to print (otherwise
+// --interactive would change it)
 double   evaluate(const double* pos);
 void     evaluations_reset(void);
 uint64_t evaluations(void);
 
-// The functions themselves are private to fitness.c; the catalog is the only way to them
-struct FitnessEntry {
-  const char* name;
-  double (*fn)(const double*);
-  // n_dims_min == n_dims_max for fixed dimension functions
-  int    n_dims_min;  // 0 = unbounded below
-  int    n_dims_max;  // 0 = unbounded above
-  double domain_lo;   // -INFINITY = unbounded below
-  double domain_hi;   //  INFINITY = unbounded above
-};
-
-extern const FitnessEntry fitness_table[];
+// What the rest of the program may do with a catalog entry: find it by its config name (NULL
+// when there's no such function), name it, and check the run against its limits
+const FitnessEntry* fitness_find(const char* name);
+const char*         fitness_name(const FitnessEntry* entry);
+// Dies unless g_cfg's n_dims and domain are ones g_cfg.fitness is defined for
+void fitness_check(void);

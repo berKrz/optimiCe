@@ -86,16 +86,13 @@ static void set_field(const char* source, const FieldSpec* row, void* base, toml
       die_at(source, row->name, "unrecognized value");
     }
     case FIELD_FITNESS: {
-      // Stores the catalog entry itself, the way FIELD_ALGORITHM stores the algorithm
-      // fitness_table is the only catalog, so the row's lookup is unused
+      // Stores the catalog entry itself; fitness.c owns the only catalog, so the row's lookup is
+      // unused
       if (d.type != TOML_STRING) die_at(source, row->name, "expected string");
-      for (int i = 0; fitness_table[i].name; i++) {
-        if (strcmp(fitness_table[i].name, d.u.s) == 0) {
-          *(const FitnessEntry**) target = &fitness_table[i];
-          return;
-        }
-      }
-      die_at(source, row->name, "unknown fitness function");
+      const FitnessEntry* entry = fitness_find(d.u.s);
+      if (!entry) die_at(source, row->name, "unknown fitness function");
+      *(const FitnessEntry**) target = entry;
+      return;
     }
     case FIELD_ALGORITHM:
       // Unreachable: walk_section skips the algorithm row, which toml.c's pre-pass resolves
@@ -358,17 +355,7 @@ void validate(void) {
   if (g_cfg.iterations < 1) die_with_hint("iterations must be positive");
   if (g_cfg.stagnation < 0) die_with_hint("stagnation must be non-negative (0 disables it)");
 
-  const FitnessEntry* fe = g_cfg.fitness;  // set_field resolved it, or the default did
-
-  if (fe->n_dims_min && g_cfg.n_dims < fe->n_dims_min)
-    die_with_hint("for %s, n_dims must be at least %d (current: %d)", fe->name, fe->n_dims_min,
-                  g_cfg.n_dims);
-  if (fe->n_dims_max && g_cfg.n_dims > fe->n_dims_max)
-    die_with_hint("for %s, n_dims must be at most %d (current: %d)", fe->name, fe->n_dims_max,
-                  g_cfg.n_dims);
-  if (g_cfg.domain_min < fe->domain_lo || g_cfg.domain_max > fe->domain_hi)
-    die_with_hint("for %s, the domain must be contained in [%g, %g]", fe->name, fe->domain_lo,
-                  fe->domain_hi);
+  fitness_check();  // g_cfg.fitness is set: set_field resolved it, or the default did
 
   if (g_cfg.algorithm->validate) g_cfg.algorithm->validate();
 }
@@ -378,9 +365,7 @@ void validate(void) {
 // One run's resolved config, as loaded into g_cfg and the algorithm's cfg; seed and replicates are
 // batch-wide, so dump_batch prints them once
 void dump_config(void) {
-  const FitnessEntry* fe = g_cfg.fitness;
-
-  printf("algorithm      = %s\n", g_cfg.algorithm ? g_cfg.algorithm->name : "(unset)");
+  printf("algorithm      = %s\n", g_cfg.algorithm->name);
   printf("direction      = %s\n", enum_name(direction_table, g_cfg.direction));
   printf("n_dims         = %d\n", g_cfg.n_dims);
   printf("iterations     = %d\n", g_cfg.iterations);
@@ -390,7 +375,7 @@ void dump_config(void) {
   printf("domain_max     = %g\n", g_cfg.domain_max);
   printf("init_min       = %g\n", g_cfg.init_min);
   printf("init_max       = %g\n", g_cfg.init_max);
-  printf("fitness        = %s\n", fe ? fe->name : "(unknown)");
+  printf("fitness        = %s\n", fitness_name(g_cfg.fitness));
 
   if (!g_cfg.algorithm) return;
   printf("\n# %s fields\n", g_cfg.algorithm->name);

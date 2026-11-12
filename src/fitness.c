@@ -1,6 +1,19 @@
 #include <math.h>
+#include <string.h>
 
 #include "common.h"
+
+// A catalog entry. The struct is defined here and nowhere else, so no other file can reach `fn`:
+// evaluate is the only caller of a fitness function, and no call goes uncounted
+struct FitnessEntry {
+  const char* name;
+  double (*fn)(const double*);
+  // n_dims_min == n_dims_max for fixed dimension functions
+  int    n_dims_min;  // 0 = unbounded below
+  int    n_dims_max;  // 0 = unbounded above
+  double domain_lo;   // -INFINITY = unbounded below
+  double domain_hi;   //  INFINITY = unbounded above
+};
 
 // --- Counted evaluation ---
 
@@ -15,8 +28,6 @@ void     evaluations_reset(void) { count = 0; }
 uint64_t evaluations(void) { return count; }
 
 // --- Functions ---
-//
-// Static: the catalog below is the only way to them, and evaluate is their only caller
 
 static double sphere(const double* pos) {
   double sum = 0.0;
@@ -76,16 +87,18 @@ static double schaffer_f6(const double* pos) {
   return 0.5 + (sin(sqrt(r1)) * sin(sqrt(r1)) - 0.5) / (r2 * r2);
 }
 
-// Catalog of available fitness functions, by config name. NULL-terminated
-// config.c's "fitness" handler resolves a name to its entry, which g_cfg.fitness then points at;
-// validate() enforces the entry's preconditions on g_cfg, and dump_config() prints its name.
+// --- Catalog ---
+
+// The available fitness functions, by config name. NULL-terminated
+// config.c's "fitness" handler resolves a name to its entry with fitness_find, and g_cfg.fitness
+// then points at it
 //
 // A function must not return NaN for finite coordinates: nothing compares better or worse than
 // NaN, so the algorithms' best tracking relies on it. Overflowing to an infinity is fine
 //
 // n_dims_min & n_dims_max: 0 means unbounded on that side.
 // domain_lo & domain_hi:   -/+INFINITY mean unbounded on that side.
-const FitnessEntry fitness_table[] = {
+static const FitnessEntry fitness_table[] = {
     {"sphere",      sphere,      0, 0, -INFINITY, INFINITY},
     {"rosenbrock",  rosenbrock,  2, 0, -INFINITY, INFINITY},
     {"rastrigin",   rastrigin,   0, 0, -5.12,     5.12    },
@@ -96,3 +109,25 @@ const FitnessEntry fitness_table[] = {
     {"schaffer_f6", schaffer_f6, 2, 2, -100.0,    100.0   },
     {NULL,          NULL,        0, 0, 0.0,       0.0     },
 };
+
+const FitnessEntry* fitness_find(const char* name) {
+  for (int i = 0; fitness_table[i].name; i++)
+    if (strcmp(fitness_table[i].name, name) == 0) return &fitness_table[i];
+  return NULL;
+}
+
+const char* fitness_name(const FitnessEntry* entry) { return entry->name; }
+
+void fitness_check(void) {
+  const FitnessEntry* fe = g_cfg.fitness;
+
+  if (fe->n_dims_min && g_cfg.n_dims < fe->n_dims_min)
+    die_with_hint("for %s, n_dims must be at least %d (current: %d)", fe->name, fe->n_dims_min,
+                  g_cfg.n_dims);
+  if (fe->n_dims_max && g_cfg.n_dims > fe->n_dims_max)
+    die_with_hint("for %s, n_dims must be at most %d (current: %d)", fe->name, fe->n_dims_max,
+                  g_cfg.n_dims);
+  if (g_cfg.domain_min < fe->domain_lo || g_cfg.domain_max > fe->domain_hi)
+    die_with_hint("for %s, the domain must be contained in [%g, %g]", fe->name, fe->domain_lo,
+                  fe->domain_hi);
+}
