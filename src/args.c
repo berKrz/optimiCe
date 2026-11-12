@@ -33,7 +33,7 @@ static void print_help_overview(void) {
       "Options:\n"
       "  -f, --config <file>     TOML configuration file (required)\n"
       "  -i, --interactive       Pause after each iteration (single job only)\n"
-      "  -l, --list              List available algorithms\n"
+      "  -l, --list              List available algorithms and fitness functions\n"
       "  -d, --dump-config       Print the resolved configuration and exit\n"
       "  -o, --output [path]     Also write results as CSV: to a file, into a directory (path\n"
       "                          ending in /), or, without a path, to a generated name here\n"
@@ -61,8 +61,12 @@ static void print_help_algorithm(const char* name) {
   die_with_hint("unknown algorithm: '%s'", name);
 }
 
+// Both lists come from where the names are defined: the registry and the fitness catalog
 static void print_list(void) {
-  for (int i = 0; algorithms[i]; i++) printf("%s\n", algorithms[i]->name);
+  printf("Algorithms:\n");
+  for (int i = 0; algorithms[i]; i++) printf("  %s\n", algorithms[i]->name);
+  printf("\nFitness functions:\n");
+  fitness_print_catalog();
 }
 
 // Dies naming the option getopt just rejected, the way the user wrote it: `arg` is the argument

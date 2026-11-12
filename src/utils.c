@@ -10,12 +10,6 @@
 #include "algorithms.h"
 #include "common.h"
 
-const char* enum_name(const EnumEntry* table, int value) {
-  for (int i = 0; table[i].name; i++)
-    if (table[i].value == value) return table[i].name;
-  return "?";
-}
-
 _Thread_local const char* g_where;
 
 // Several worker threads may fail at once, but exit() must only run once: the first caller

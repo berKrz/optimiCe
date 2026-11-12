@@ -259,32 +259,31 @@ void set_defaults(const FieldSpec* table, void* base) {
 
 // Row order is --help order: [common]-only fields first, [[run]]-only last
 const FieldSpec runner_fields[] = {
-    {"seed", FIELD_UINT, SECTION_COMMON, offsetof(Config, seed), NULL, NULL,
-     "Base seed; replicate r uses seed + r (omitted = generated)"},
-    {"replicates", FIELD_INT, SECTION_COMMON, offsetof(Config, replicates), NULL, "1",
-     "Repetitions of every run, one seed each"},
-    {"direction", FIELD_ENUM, SCOPE_GLOBAL, offsetof(Config, direction), direction_table,
-     "minimize", "Direction: minimize | maximize"},
-    {"n_dims", FIELD_INT, SCOPE_GLOBAL, offsetof(Config, n_dims), NULL, "2",
-     "Number of dimensions"},
-    {"iterations", FIELD_INT, SCOPE_GLOBAL, offsetof(Config, iterations), NULL, "100",
-     "Iteration budget (generations, for GA)"},
-    {"target_fitness", FIELD_DOUBLE, SCOPE_GLOBAL, offsetof(Config, target_fitness), NULL, "nan",
-     "Stop early once the best reaches this value"},
-    {"stagnation", FIELD_INT, SCOPE_GLOBAL, offsetof(Config, stagnation), NULL, "0",
-     "Stop early after N iterations without improvement (0 = off)"},
-    {"domain_min", FIELD_DOUBLE, SCOPE_GLOBAL, offsetof(Config, domain_min), NULL, "-5.0",
-     "Lower bound of the domain (-inf = unbounded below)"},
-    {"domain_max", FIELD_DOUBLE, SCOPE_GLOBAL, offsetof(Config, domain_max), NULL, "5.0",
-     "Upper bound of the domain (inf = unbounded above)"},
-    {"init_min", FIELD_DOUBLE, SCOPE_GLOBAL, offsetof(Config, init_min), NULL, "nan",
-     "Lower end of the initial population's range (unset = domain_min)"},
-    {"init_max", FIELD_DOUBLE, SCOPE_GLOBAL, offsetof(Config, init_max), NULL, "nan",
-     "Upper end of the initial population's range (unset = domain_max)"},
-    {"fitness", FIELD_FITNESS, SCOPE_GLOBAL, offsetof(Config, fitness), NULL, "sphere",
-     "Fitness function"},
-    {"algorithm", FIELD_ALGORITHM, SECTION_RUN, 0, NULL, NULL, "Algorithm to run: pso | ga | sma"},
-    {NULL, 0, 0, 0, NULL, NULL, NULL},
+    FIELD_ROW(Config, seed, UINT, SECTION_COMMON, NULL, NULL,
+              "Base seed; replicate r uses seed + r (omitted = generated)"),
+    FIELD_ROW(Config, replicates, INT, SECTION_COMMON, NULL, "1",
+              "Repetitions of every run, one seed each"),
+    FIELD_ROW(Config, direction, ENUM, SCOPE_GLOBAL, direction_table, "minimize", "Direction"),
+    FIELD_ROW(Config, n_dims, INT, SCOPE_GLOBAL, NULL, "2", "Number of dimensions"),
+    FIELD_ROW(Config, iterations, INT, SCOPE_GLOBAL, NULL, "100",
+              "Iteration budget (generations, for GA)"),
+    FIELD_ROW(Config, target_fitness, DOUBLE, SCOPE_GLOBAL, NULL, "nan",
+              "Stop early once the best reaches this value"),
+    FIELD_ROW(Config, stagnation, INT, SCOPE_GLOBAL, NULL, "0",
+              "Stop early after N iterations without improvement (0 = off)"),
+    FIELD_ROW(Config, domain_min, DOUBLE, SCOPE_GLOBAL, NULL, "-5.0",
+              "Lower bound of the domain (-inf = unbounded below)"),
+    FIELD_ROW(Config, domain_max, DOUBLE, SCOPE_GLOBAL, NULL, "5.0",
+              "Upper bound of the domain (inf = unbounded above)"),
+    FIELD_ROW(Config, init_min, DOUBLE, SCOPE_GLOBAL, NULL, "nan",
+              "Lower end of the initial population's range (unset = domain_min)"),
+    FIELD_ROW(Config, init_max, DOUBLE, SCOPE_GLOBAL, NULL, "nan",
+              "Upper end of the initial population's range (unset = domain_max)"),
+    FIELD_ROW(Config, fitness, FITNESS, SCOPE_GLOBAL, NULL, "sphere",
+              "Fitness function (see --list)"),
+    FIELD_ROW(Config, algorithm, ALGORITHM, SECTION_RUN, NULL, NULL,
+              "Algorithm to run (see --list)"),
+    FIELDS_END,
 };
 
 // --- Help printer ---
@@ -311,11 +310,19 @@ static const char* get_default_display(const FieldSpec* f) {
   return "-";
 }
 
+// An enum row's description is followed by its choices, read from its lookup table:
+// "Selection: roulette | rank | tournament"
 void print_help_from_table(const FieldSpec* table, unsigned scope) {
   for (int i = 0; table[i].name; i++) {
-    if (table[i].scope != scope) continue;
-    printf("  %-16s  %-7s  (default: %-14s)  %s\n", table[i].name, type_label(table[i].type),
-           get_default_display(&table[i]), table[i].description ? table[i].description : "");
+    const FieldSpec* row = &table[i];
+    if (row->scope != scope) continue;
+    printf("  %-16s  %-7s  (default: %-14s)  %s", row->name, type_label(row->type),
+           get_default_display(row), row->description ? row->description : "");
+    if (row->type == FIELD_ENUM) {
+      const EnumEntry* choices = row->lookup;
+      for (int c = 0; choices[c].name; c++) printf("%s%s", c ? " | " : ": ", choices[c].name);
+    }
+    printf("\n");
   }
 }
 
@@ -362,22 +369,52 @@ void validate(void) {
 
 // --- Dump ---
 
-// One run's resolved config, as loaded into g_cfg and the algorithm's cfg; seed and replicates are
-// batch-wide, so dump_batch prints them once
-void dump_config(void) {
-  printf("algorithm      = %s\n", g_cfg.algorithm->name);
-  printf("direction      = %s\n", enum_name(direction_table, g_cfg.direction));
-  printf("n_dims         = %d\n", g_cfg.n_dims);
-  printf("iterations     = %d\n", g_cfg.iterations);
-  printf("target_fitness = %g\n", g_cfg.target_fitness);
-  printf("stagnation     = %d\n", g_cfg.stagnation);
-  printf("domain_min     = %g\n", g_cfg.domain_min);
-  printf("domain_max     = %g\n", g_cfg.domain_max);
-  printf("init_min       = %g\n", g_cfg.init_min);
-  printf("init_max       = %g\n", g_cfg.init_max);
-  printf("fitness        = %s\n", fitness_name(g_cfg.fitness));
+// The name `table` maps to `value`, or "?" if none does
+static const char* enum_name(const EnumEntry* table, int value) {
+  for (int i = 0; table[i].name; i++)
+    if (table[i].value == value) return table[i].name;
+  return "?";
+}
 
-  if (!g_cfg.algorithm) return;
+// Prints `name = value` for the rows of `table` a run can set, reading each value through
+// `base + offset` by the row's type: the reverse of set_field. Names are padded to the longest
+// [common]-only rows (seed, replicates) are batch-wide and skipped; dump_batch prints them
+static void dump_fields(const FieldSpec* table, const void* base) {
+  int width = 0;
+  for (int i = 0; table[i].name; i++) {
+    int len = (int) strlen(table[i].name);
+    if ((table[i].scope & SECTION_RUN) && len > width) width = len;
+  }
+
+  for (int i = 0; table[i].name; i++) {
+    const FieldSpec* row = &table[i];
+    if (!(row->scope & SECTION_RUN)) continue;
+    const void* value = (const char*) base + row->offset;
+
+    printf("%-*s = ", width, row->name);
+    switch (row->type) {
+      case FIELD_INT:         printf("%d", *(const int*) value); break;
+      case FIELD_UINT:        printf("0x%08x", *(const uint32_t*) value); break;
+      case FIELD_DOUBLE:      printf("%g", *(const double*) value); break;
+      case FIELD_BOOL:        printf("%s", *(const int*) value ? "true" : "false"); break;
+      case FIELD_ENUM:        printf("%s", enum_name(row->lookup, *(const int*) value)); break;
+      case FIELD_FITNESS:     printf("%s", fitness_name(*(const FitnessEntry* const*) value)); break;
+      case FIELD_ALGORITHM:   printf("%s", (*(const Algorithm* const*) value)->name); break;
+      case FIELD_DOUBLE_LIST: {
+        const DoubleList* list = value;
+        printf("[");
+        for (int k = 0; k < list->n; k++) printf(k ? ", %g" : "%g", list->v[k]);
+        printf("]");
+        break;
+      }
+    }
+    printf("\n");
+  }
+}
+
+// One run's resolved config, as loaded into g_cfg and the algorithm's cfg
+void dump_config(void) {
+  dump_fields(runner_fields, &g_cfg);
   printf("\n# %s fields\n", g_cfg.algorithm->name);
-  if (g_cfg.algorithm->dump) g_cfg.algorithm->dump();  // defensive
+  dump_fields(g_cfg.algorithm->fields, g_cfg.algorithm->cfg_base());
 }

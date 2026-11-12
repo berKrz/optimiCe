@@ -185,3 +185,5 @@ const FitnessEntry* fitness_find(const char* name);
 const char*         fitness_name(const FitnessEntry* entry);
 // Dies unless g_cfg's n_dims and domain are ones g_cfg.fitness is defined for
 void fitness_check(void);
+// Prints the catalog for --list: one line per function, its name and its limits
+void fitness_print_catalog(void);

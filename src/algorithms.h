@@ -57,6 +57,20 @@ typedef struct FieldSpec {
   const char* description;
 } FieldSpec;
 
+// Row constructors. A key is named after the struct member it's stored in, so the name is
+// written once and the two can't disagree:
+//   FIELD(PsoConfig, swarm_size, INT, "30", "Swarm size")
+// FIELD_ROW spells out every column, for the runner's table, whose rows differ in scope
+// FIELD and ENUM_FIELD are for an algorithm's table: every algorithm field has the same scope, and
+// only an enum has a lookup table
+#define FIELD_ROW(cfg_type, member, kind, scope, lookup, default_display, description) \
+  {#member, FIELD_##kind, scope, offsetof(cfg_type, member), lookup, default_display, description}
+#define FIELD(cfg_type, member, kind, default_display, description) \
+  FIELD_ROW(cfg_type, member, kind, SCOPE_ALGO, NULL, default_display, description)
+#define ENUM_FIELD(cfg_type, member, lookup, default_display, description) \
+  FIELD_ROW(cfg_type, member, ENUM, SCOPE_ALGO, lookup, default_display, description)
+#define FIELDS_END {NULL, 0, 0, 0, NULL, NULL, NULL}
+
 // Walker iterates it reading `name`, and writes `value` (as int) through the FieldSpec's
 // offset on a match Sentinel: {NULL, 0} terminates the table
 typedef struct {
@@ -78,7 +92,6 @@ typedef struct Algorithm {
   // Called once per run, after every field is set and before anything reads the cfg
   // May resolve derived values (e.g. pso's w_end = w), so dump and run see the final config
   void (*validate)(void);
-  void (*dump)(void);
 
   // Fills `out`: fitness, stop state, and n_dims doubles into the caller-owned out->pos
   // Prints only its per-iteration / interactive output; the caller prints the footer
@@ -91,9 +104,6 @@ extern const Algorithm sma_algorithm;
 
 // Registry, NULL-terminated - defined in main.c
 extern const Algorithm* const algorithms[];
-
-// Reverse lookup: the name a table maps to `value`, or "?" if none does (utils.c)
-const char* enum_name(const EnumEntry* table, int value);
 
 // bounds.c - out-of-domain handling shared by continuous-position algorithms
 // clamp pins the coordinate to the violated bound, reflect mirrors it back inside (bouncing as

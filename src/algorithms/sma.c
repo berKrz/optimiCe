@@ -21,14 +21,12 @@ static _Thread_local SmaConfig cfg;
 // --- Field table ---
 
 static const FieldSpec sma_fields[] = {
-    {"pop_size", FIELD_INT, SCOPE_ALGO, offsetof(SmaConfig, pop_size), NULL, "30",
-     "Population size"},
-    {"z", FIELD_DOUBLE, SCOPE_ALGO, offsetof(SmaConfig, z), NULL, "0.03",
-     "Full re-init probability (per slime), into the init range"},
-    {"bounds", FIELD_ENUM, SCOPE_ALGO, offsetof(SmaConfig, bounds), bounds_table, "clamp",
-     "Out-of-domain handling: clamp | reflect | random (ignored when the domain has no finite "
-     "end)"},
-    {NULL, 0, 0, 0, NULL, NULL, NULL},
+    FIELD(SmaConfig, pop_size, INT, "30", "Population size"),
+    FIELD(SmaConfig, z, DOUBLE, "0.03",
+          "Full re-init probability (per slime), into the init range"),
+    ENUM_FIELD(SmaConfig, bounds, bounds_table, "clamp",
+               "Out-of-domain handling (ignored when the domain has no finite end)"),
+    FIELDS_END,
 };
 
 static void* sma_cfg_base(void) { return &cfg; }
@@ -41,14 +39,6 @@ static void sma_validate(void) {
   check_bounds_mode(cfg.bounds);
   // positions, weights and fits of every slime share one buffer
   check_fits_int(cfg.pop_size, 2LL * g_cfg.n_dims + 1, "pop_size x n_dims");
-}
-
-// --- Dump ---
-
-static void sma_dump(void) {
-  printf("pop_size   = %d\n", cfg.pop_size);
-  printf("z          = %g\n", cfg.z);
-  printf("bounds     = %s\n", enum_name(bounds_table, cfg.bounds));
 }
 
 // --- Fitness ranking ---
@@ -230,6 +220,5 @@ const Algorithm sma_algorithm = {
     .cfg_base = sma_cfg_base,
     .cfg_size = sizeof(SmaConfig),
     .validate = sma_validate,
-    .dump     = sma_dump,
     .run      = sma_run,
 };

@@ -41,24 +41,18 @@ static const EnumEntry gbest_update_table[] = {
 };
 
 static const FieldSpec pso_fields[] = {
-    {"swarm_size", FIELD_INT, SCOPE_ALGO, offsetof(PsoConfig, swarm_size), NULL, "30",
-     "Swarm size"},
-    {"w", FIELD_DOUBLE, SCOPE_ALGO, offsetof(PsoConfig, w), NULL, "1.0",
-     "Inertia weight (at the first iteration)"},
-    {"w_end", FIELD_DOUBLE, SCOPE_ALGO, offsetof(PsoConfig, w_end), NULL, "nan",
-     "Inertia at the last iteration, linear decay from w (unset = w)"},
-    {"v_max", FIELD_DOUBLE, SCOPE_ALGO, offsetof(PsoConfig, v_max), NULL, "0.0",
-     "Velocity cap, fraction of domain width (0 = off)"},
-    {"c1", FIELD_DOUBLE, SCOPE_ALGO, offsetof(PsoConfig, c1), NULL, "2.0", "Cognitive coefficient"},
-    {"c2", FIELD_DOUBLE, SCOPE_ALGO, offsetof(PsoConfig, c2), NULL, "2.0", "Social coefficient"},
-    {"pbest_init", FIELD_ENUM, SCOPE_ALGO, offsetof(PsoConfig, pbest_init), pbest_init_table,
-     "position", "pbest init: position | random"},
-    {"gbest_update", FIELD_ENUM, SCOPE_ALGO, offsetof(PsoConfig, gbest_update), gbest_update_table,
-     "async", "gbest update: async | sync"},
-    {"bounds", FIELD_ENUM, SCOPE_ALGO, offsetof(PsoConfig, bounds), bounds_table, "clamp",
-     "Out-of-domain handling: clamp | reflect | random (ignored when the domain has no finite "
-     "end)"},
-    {NULL, 0, 0, 0, NULL, NULL, NULL},
+    FIELD(PsoConfig, swarm_size, INT, "30", "Swarm size"),
+    FIELD(PsoConfig, w, DOUBLE, "1.0", "Inertia weight (at the first iteration)"),
+    FIELD(PsoConfig, w_end, DOUBLE, "nan",
+          "Inertia at the last iteration, linear decay from w (unset = w)"),
+    FIELD(PsoConfig, v_max, DOUBLE, "0.0", "Velocity cap, fraction of domain width (0 = off)"),
+    FIELD(PsoConfig, c1, DOUBLE, "2.0", "Cognitive coefficient"),
+    FIELD(PsoConfig, c2, DOUBLE, "2.0", "Social coefficient"),
+    ENUM_FIELD(PsoConfig, pbest_init, pbest_init_table, "position", "pbest init"),
+    ENUM_FIELD(PsoConfig, gbest_update, gbest_update_table, "async", "gbest update"),
+    ENUM_FIELD(PsoConfig, bounds, bounds_table, "clamp",
+               "Out-of-domain handling (ignored when the domain has no finite end)"),
+    FIELDS_END,
 };
 
 static void* pso_cfg_base(void) { return &cfg; }
@@ -77,20 +71,6 @@ static void pso_validate(void) {
   check_bounds_mode(cfg.bounds);
   // pos, vel and pbest of every particle share one buffer
   check_fits_int(cfg.swarm_size, 3LL * g_cfg.n_dims, "swarm_size x n_dims");
-}
-
-// --- Dump ---
-
-static void pso_dump(void) {
-  printf("swarm_size   = %d\n", cfg.swarm_size);
-  printf("w            = %g\n", cfg.w);
-  printf("w_end        = %g\n", cfg.w_end);
-  printf("v_max        = %g\n", cfg.v_max);
-  printf("c1           = %g\n", cfg.c1);
-  printf("c2           = %g\n", cfg.c2);
-  printf("pbest_init   = %s\n", enum_name(pbest_init_table, cfg.pbest_init));
-  printf("gbest_update = %s\n", enum_name(gbest_update_table, cfg.gbest_update));
-  printf("bounds       = %s\n", enum_name(bounds_table, cfg.bounds));
 }
 
 // --- Particle layout ---
@@ -285,6 +265,5 @@ const Algorithm pso_algorithm = {
     .cfg_base = pso_cfg_base,
     .cfg_size = sizeof(PsoConfig),
     .validate = pso_validate,
-    .dump     = pso_dump,
     .run      = pso_run,
 };

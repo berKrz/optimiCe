@@ -90,7 +90,7 @@ If you install it under a non-default prefix, point `pkg-config` at it when buil
 |-------------|-------------------|--------------------------------------------------------------------------|
 | `-f FILE`   | `--config FILE`   | Path to TOML configuration file (required)                               |
 | `-i`        | `--interactive`   | Pause after each iteration; the batch must be a single job               |
-| `-l`        | `--list`          | List available algorithms                                                |
+| `-l`        | `--list`          | List available algorithms and fitness functions, with each function's limits on `n_dims` and the domain |
 | `-d`        | `--dump-config`   | Print the resolved configuration and exit                                |
 | `-o [PATH]` | `--output [PATH]` | Also write the results to a CSV file (see [Results file](#results-file)) |
 | `-h [ALG]`  | `--help [ALG]`    | General help, or algorithm-specific help if `ALG` is given               |

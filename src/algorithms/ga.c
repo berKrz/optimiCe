@@ -78,25 +78,17 @@ static const EnumEntry crossover_table[] = {
 // --- Field table ---
 
 static const FieldSpec ga_fields[] = {
-    {"pop_size", FIELD_INT, SCOPE_ALGO, offsetof(GaConfig, pop_size), NULL, "15",
-     "Population size (>= 2)"},
-    {"ind_size", FIELD_INT, SCOPE_ALGO, offsetof(GaConfig, ind_size), NULL, "22",
-     "Bits per dimension [2, 63]"},
-    {"tournament_size", FIELD_INT, SCOPE_ALGO, offsetof(GaConfig, tournament_size), NULL, "2",
-     "Individuals per tournament"},
-    {"rank_pressure", FIELD_DOUBLE, SCOPE_ALGO, offsetof(GaConfig, rank_pressure), NULL, "1.5",
-     "Rank selection pressure in [1.0, 2.0]"},
-    {"cut_points", FIELD_DOUBLE_LIST, SCOPE_ALGO, offsetof(GaConfig, cut_points), NULL, "[0.6]",
-     "n_point cut ratios in (0.0, 1.0), increasing"},
-    {"mutation_rate", FIELD_DOUBLE, SCOPE_ALGO, offsetof(GaConfig, mutation_rate), NULL, "0.01",
-     "Per-bit flip rate in [0.0, 1.0)"},
-    {"selection", FIELD_ENUM, SCOPE_ALGO, offsetof(GaConfig, selection), selection_table,
-     "roulette", "Selection: roulette | roulette_normalized | rank | tournament"},
-    {"crossover", FIELD_ENUM, SCOPE_ALGO, offsetof(GaConfig, crossover), crossover_table, "n_point",
-     "Crossover: n_point | uniform"},
-    {"elitism", FIELD_ENUM, SCOPE_ALGO, offsetof(GaConfig, elitism), elitism_table, "none",
-     "Elitism: none | family"},
-    {NULL, 0, 0, 0, NULL, NULL, NULL},
+    FIELD(GaConfig, pop_size, INT, "15", "Population size (>= 2)"),
+    FIELD(GaConfig, ind_size, INT, "22", "Bits per dimension [2, 63]"),
+    FIELD(GaConfig, tournament_size, INT, "2", "Individuals per tournament"),
+    FIELD(GaConfig, rank_pressure, DOUBLE, "1.5", "Rank selection pressure in [1.0, 2.0]"),
+    FIELD(GaConfig, cut_points, DOUBLE_LIST, "[0.6]",
+          "n_point cut ratios in (0.0, 1.0), increasing"),
+    FIELD(GaConfig, mutation_rate, DOUBLE, "0.01", "Per-bit flip rate in [0.0, 1.0)"),
+    ENUM_FIELD(GaConfig, selection, selection_table, "roulette", "Selection"),
+    ENUM_FIELD(GaConfig, crossover, crossover_table, "n_point", "Crossover"),
+    ENUM_FIELD(GaConfig, elitism, elitism_table, "none", "Elitism"),
+    FIELDS_END,
 };
 
 static void* ga_cfg_base(void) { return &cfg; }
@@ -194,22 +186,6 @@ static void ga_validate(void) {
   // rank_pressure is only checked when in use
   if (cfg.selection == RANK && !(cfg.rank_pressure >= 1.0 && cfg.rank_pressure <= 2.0))
     die_with_hint("rank_pressure must be in [1.0, 2.0]");
-}
-
-// --- Dump ---
-
-static void ga_dump(void) {
-  printf("pop_size        = %d\n", cfg.pop_size);
-  printf("ind_size        = %d\n", cfg.ind_size);
-  printf("tournament_size = %d\n", cfg.tournament_size);
-  printf("rank_pressure   = %g\n", cfg.rank_pressure);
-  printf("cut_points      = [");
-  for (int i = 0; i < cfg.cut_points.n; i++) printf(i ? ", %g" : "%g", cfg.cut_points.v[i]);
-  printf("]\n");
-  printf("mutation_rate   = %g\n", cfg.mutation_rate);
-  printf("selection       = %s\n", enum_name(selection_table, cfg.selection));
-  printf("crossover       = %s\n", enum_name(crossover_table, cfg.crossover));
-  printf("elitism         = %s\n", enum_name(elitism_table, cfg.elitism));
 }
 
 // --- Decode / eval ---
@@ -754,6 +730,5 @@ const Algorithm ga_algorithm = {
     .cfg_base = ga_cfg_base,
     .cfg_size = sizeof(GaConfig),
     .validate = ga_validate,
-    .dump     = ga_dump,
     .run      = ga_run,
 };

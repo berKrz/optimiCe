@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "common.h"
@@ -130,4 +131,19 @@ void fitness_check(void) {
   if (g_cfg.domain_min < fe->domain_lo || g_cfg.domain_max > fe->domain_hi)
     die_with_hint("for %s, the domain must be contained in [%g, %g]", fe->name, fe->domain_lo,
                   fe->domain_hi);
+}
+
+void fitness_print_catalog(void) {
+  for (const FitnessEntry* fe = fitness_table; fe->name; fe++) {
+    char dims[32] = "any", domain[64] = "any";
+    if (fe->n_dims_min && fe->n_dims_min == fe->n_dims_max)
+      snprintf(dims, sizeof(dims), "%d", fe->n_dims_min);
+    else if (fe->n_dims_min && fe->n_dims_max)
+      snprintf(dims, sizeof(dims), "%d to %d", fe->n_dims_min, fe->n_dims_max);
+    else if (fe->n_dims_min) snprintf(dims, sizeof(dims), "%d or more", fe->n_dims_min);
+    else if (fe->n_dims_max) snprintf(dims, sizeof(dims), "%d or fewer", fe->n_dims_max);
+    if (isfinite(fe->domain_lo) || isfinite(fe->domain_hi))
+      snprintf(domain, sizeof(domain), "within [%g, %g]", fe->domain_lo, fe->domain_hi);
+    printf("  %-12s  n_dims: %-10s  domain: %s\n", fe->name, dims, domain);
+  }
 }
