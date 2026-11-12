@@ -1,5 +1,4 @@
-*.o
-*.d
+build/
 *.csv
 optimice
 result
@@ -12,6 +11,3 @@ result-*
 .envrc
 
 compile_commands.json
-
-src/version.h
-src/registry.h
