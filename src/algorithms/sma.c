@@ -199,10 +199,8 @@ static void sma_run(RunResult* out) {
       print_pop(positions, fits, DF);
       wait_for_enter();
       print_separator();
-    } else {
-      print_iteration_line(it, DF);
     }
-    if (stop_check(&stop, it, DF)) break;
+    if (end_iteration(&stop, DF)) break;
   }
 
   memcpy(out->pos, Xb, g_cfg.n_dims * sizeof(double));

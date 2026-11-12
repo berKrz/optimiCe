@@ -96,21 +96,23 @@ void print_iteration_header(int iter) {
   printf("\n\n");
 }
 
-void print_iteration_line(int iter, double best_fitness) {
-  if (!g_opts.per_iteration) return;
-  printf("Iteration %3d   best = %g\n", iter, best_fitness);
-}
-
 StopState stop_init(void) {
   return (StopState) {
       // Nothing seen yet: worse than any fitness, an infinite one included
-      .best   = g_cfg.direction == MINIMIZE ? INFINITY : -INFINITY,
-      .stale  = 0,
-      .reason = STOP_NONE,
+      .best       = g_cfg.direction == MINIMIZE ? INFINITY : -INFINITY,
+      .stale      = 0,
+      .iterations = 0,
+      .reason     = STOP_NONE,
   };
 }
 
-int stop_check(StopState* st, int iter, double current_best) {
+int end_iteration(StopState* st, double current_best) {
+  // Progress lines are for a batch of one job, and not under --interactive, which prints its own
+  // view of every iteration
+  if (g_opts.per_iteration && !g_opts.interactive)
+    printf("Iteration %3d   best = %g\n", st->iterations, current_best);
+  st->iterations++;
+
   if (is_better(current_best, st->best)) {
     st->best  = current_best;
     st->stale = 0;
@@ -123,9 +125,7 @@ int stop_check(StopState* st, int iter, double current_best) {
     st->reason = STOP_TARGET;
   else if (g_cfg.stagnation > 0 && st->stale >= g_cfg.stagnation) st->reason = STOP_STAGNATION;
 
-  if (st->reason == STOP_NONE) return 0;
-  st->iteration = iter;
-  return 1;
+  return st->reason != STOP_NONE;
 }
 
 void fmt_exact(char* buf, double x) {
@@ -155,13 +155,11 @@ void print_result(const RunResult* r) {
   printf("   fitness = %s\n\n", fit);
 
   if (r->stop.reason == STOP_TARGET)
-    printf("Stopped early at iteration %d: target fitness %g reached\n\n", r->stop.iteration,
-           g_cfg.target_fitness);
+    printf("Stopped early: target fitness %g reached\n\n", g_cfg.target_fitness);
   else if (r->stop.reason == STOP_STAGNATION)
-    printf("Stopped early at iteration %d: no improvement for %d iterations\n\n", r->stop.iteration,
-           g_cfg.stagnation);
+    printf("Stopped early: no improvement for %d iterations\n\n", g_cfg.stagnation);
 
-  printf("Iterations: %d\n", r->iterations);
+  printf("Iterations: %d\n", r->stop.iterations);
   printf("Evaluations: %" PRIu64 "\n", r->evaluations);
   printf("Algorithm: %s    Seed: 0x%08x\n", g_cfg.algorithm->name, g_cfg.seed);
   for (int i = 0; i < LINE_WIDTH; i++) printf("=");

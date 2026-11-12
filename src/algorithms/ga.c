@@ -708,9 +708,7 @@ static void ga_run(RunResult* out) {
       iter_pop(pop, fit, &work);
     }
     // Best of this generation; it's what both the progress line and the early stop look at
-    double gen_best = fit[find_best(fit)];
-    if (!g_opts.interactive) print_iteration_line(gen, gen_best);
-    if (stop_check(&stop, gen, gen_best)) break;
+    if (end_iteration(&stop, fit[find_best(fit)])) break;
   }
 
   // Final result: best of the final generation

@@ -91,28 +91,28 @@ void clear_screen(void);
 void wait_for_enter(void);
 void print_separator(void);
 void print_iteration_header(int iter);
-void print_iteration_line(int iter, double best_fitness);
 
 // Writes the shortest %g form of x, at 6 to 17 significant digits, that reads back as exactly x
 // Used for final results, so a printed value identifies the double; starting at 6 means it
 // matches plain %g whenever %g was already exact
 #define FMT_EXACT_LEN 32
 void fmt_exact(char* buf, double x);
-// Early stopping: algorithms call stop_check once per iteration with their current best fitness
-// and leave the loop when it returns 1
-// The state tracks its own best-ever, so stagnation is measured the same way for every algorithm,
-// whether or not its per-iteration best can regress
+// Early stopping: an algorithm calls end_iteration once at the end of every iteration, with its
+// current best fitness, and leaves its loop when it returns 1. The call also prints the
+// iteration's progress line when those are on, so algorithms don't
+// Stagnation is judged on the best-ever fitness, tracked here, so it works the same for every
+// algorithm whether or not its per-iteration best can regress
 typedef enum { STOP_NONE, STOP_TARGET, STOP_STAGNATION } StopReason;
 
 typedef struct {
-  double     best;       // best-ever fitness seen by stop_check
-  int        stale;      // consecutive iterations without improving `best`
-  int        iteration;  // 0-based iteration the run stopped at, valid when reason != STOP_NONE
+  double     best;        // best-ever fitness seen by end_iteration
+  int        stale;       // consecutive iterations without improving `best`
+  int        iterations;  // iterations completed so far; the run's total once it's over
   StopReason reason;
 } StopState;
 
 StopState stop_init(void);
-int       stop_check(StopState* st, int iter, double current_best);
+int       end_iteration(StopState* st, double current_best);
 
 // What a run hands back: its best fitness, where it was found, and how the run ended
 // `pos` is owned by the caller and holds n_dims doubles; the algorithm copies into it
@@ -120,7 +120,6 @@ typedef struct {
   double    fitness;
   double*   pos;
   StopState stop;
-  int       iterations;   // iterations the run completed, early stop or not; set by the runner
   uint64_t  evaluations;  // fitness evaluations the run made (see evaluate); set by the runner
 } RunResult;
 

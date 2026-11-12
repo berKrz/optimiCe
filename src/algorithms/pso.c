@@ -244,10 +244,8 @@ static void pso_run(RunResult* out) {
       print_swarm(swarm, gbest_fitness);
       wait_for_enter();
       print_separator();
-    } else {
-      print_iteration_line(i, gbest_fitness);
     }
-    if (stop_check(&stop, i, gbest_fitness)) break;
+    if (end_iteration(&stop, gbest_fitness)) break;
   }
 
   copy_pos(out->pos, gbest_pos);

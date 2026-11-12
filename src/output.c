@@ -157,8 +157,8 @@ void output_row(const char* label, int replicate, uint32_t seed, int n_dims, con
 
   char num[FMT_EXACT_LEN];
   fmt_exact(num, res->fitness);
-  fprintf(out, "%s,%d,0x%08x,%s,%d,%" PRIu64 ",%s,", label, replicate, seed, num, res->iterations,
-          res->evaluations, stop_names[res->stop.reason]);
+  fprintf(out, "%s,%d,0x%08x,%s,%d,%" PRIu64 ",%s,", label, replicate, seed, num,
+          res->stop.iterations, res->evaluations, stop_names[res->stop.reason]);
   for (int d = 0; d < n_dims; d++) {
     fmt_exact(num, res->pos[d]);
     fprintf(out, "%s%s", d ? " " : "", num);

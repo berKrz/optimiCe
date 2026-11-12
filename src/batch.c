@@ -38,8 +38,6 @@ static void run_job(const Batch* batch, int j, RunResult* out) {
   rng_init(g_cfg.seed);
   evaluations_reset();
   rc->cfg.algorithm->run(out);
-  // stop.iteration is the 0-based index the run stopped at, so it completed one more than that
-  out->iterations  = out->stop.reason != STOP_NONE ? out->stop.iteration + 1 : g_cfg.iterations;
   out->evaluations = evaluations();
   g_where          = NULL;
 }
@@ -86,11 +84,11 @@ static void print_job_line(const Printer* p, int j) {
 
   // best is padded to its longest form, "best = " and 24 characters: -1.2345678901234567e-308
   printf("%-*s  r%-*d  seed 0x%08x  %-31s  iters %-*d  ", p->label_w, rc->label, p->rep_w, r,
-         job_seed(p->batch, r), best, p->iter_w, res->iterations);
+         job_seed(p->batch, r), best, p->iter_w, res->stop.iterations);
   switch (res->stop.reason) {
     case STOP_NONE:       printf("%s\n", evals); break;
-    case STOP_TARGET:     printf("%-16s  target @ %d\n", evals, res->stop.iteration); break;
-    case STOP_STAGNATION: printf("%-16s  stagnation @ %d\n", evals, res->stop.iteration); break;
+    case STOP_TARGET:     printf("%-16s  target\n", evals); break;
+    case STOP_STAGNATION: printf("%-16s  stagnation\n", evals); break;
   }
 }
 
