@@ -21,14 +21,6 @@ static const EnumEntry direction_table[] = {
     {NULL,       0       },
 };
 
-// --- Algorithm lookup ---
-
-int find_algorithm(const char* name) {
-  for (int i = 0; algorithms[i]; i++)
-    if (strcmp(name, algorithms[i]->name) == 0) return i;
-  return -1;
-}
-
 // --- set_field: the single write path shared by walker and defaults ---
 
 // A "nan" default marks an optional float: NaN means unset, and is resolved after parsing if at

@@ -14,3 +14,4 @@ result-*
 compile_commands.json
 
 src/version.h
+src/registry.h

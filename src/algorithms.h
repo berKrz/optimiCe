@@ -79,6 +79,8 @@ typedef struct {
 } EnumEntry;
 
 // One per algorithm, defined in the algorithm's own file
+// That file is all an algorithm needs: src/algorithms/<name>.c defining
+// `const Algorithm <name>_algorithm` is compiled and registered by the build
 typedef struct Algorithm {
   const char*      name;
   const FieldSpec* fields;
@@ -98,12 +100,11 @@ typedef struct Algorithm {
   void (*run)(RunResult* out);
 } Algorithm;
 
-extern const Algorithm pso_algorithm;
-extern const Algorithm ga_algorithm;
-extern const Algorithm sma_algorithm;
-
-// Registry, NULL-terminated - defined in main.c
+// Registry, NULL-terminated, in alphabetical order - defined in registry.c
 extern const Algorithm* const algorithms[];
+
+// Index of `name` in `algorithms[]`, or -1 when it isn't registered
+int find_algorithm(const char* name);
 
 // bounds.c - out-of-domain handling shared by continuous-position algorithms
 // clamp pins the coordinate to the violated bound, reflect mirrors it back inside (bouncing as
@@ -137,9 +138,6 @@ void print_help_from_table(const FieldSpec* table, unsigned scope);
 // Writes the sections in `scope` as text, e.g. "[common] or [[run]]"
 void scope_text(unsigned scope, char* buf, size_t size);
 void set_defaults(const FieldSpec* table, void* base);
-
-// Index of `name` in `algorithms[]`, or -1 when it isn't registered
-int find_algorithm(const char* name);
 
 // Fields that belong to the runner rather than to any algorithm - defined in config.c
 // Declared here because the full FieldSpec type is only visible after this header
