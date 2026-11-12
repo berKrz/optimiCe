@@ -32,8 +32,9 @@ typedef struct {
 
 extern _Thread_local Config g_cfg;
 
-// Process-wide options from the command line, not part of any config
-// Set once by parse_args before anything runs, read-only afterwards, so shared by every thread
+// Process-wide options, not part of any config: what the code running a job reads
+// Set once before anything runs (interactive by parse_args, per_iteration by main once the batch
+// is loaded), read-only afterwards, so shared by every thread
 typedef struct {
   int interactive;
   int per_iteration;  // print a progress line per iteration; on only for single-job batches
@@ -87,7 +88,6 @@ void* xcalloc(size_t n, size_t size);
 // e.g. "swarm_size x n_dims". Both factors must be positive
 void check_fits_int(int count, long long per_item, const char* what);
 
-void clear_screen(void);
 void wait_for_enter(void);
 void print_separator(void);
 void print_iteration_header(int iter);
@@ -165,8 +165,19 @@ void run_batch(const Batch* ex);
 void dump_batch(const Batch* ex);
 void free_batch(Batch* ex);
 
-// args.c - CLI, loading, the --interactive check and --dump-config; returns only to run
-Batch parse_args(int argc, char** argv);
+// args.c
+// What the command line asked main to do
+typedef struct {
+  const char* config_path;  // -f
+  int         dump_config;  // -d
+  int         output;       // -o was given
+  const char* output_path;  // its argument; NULL when -o came bare: a name is generated
+} Args;
+
+// Parses the command line and nothing more: it loads no config and opens no file
+// --interactive goes to g_opts, the rest is returned. --help and --list are answered here and
+// exit; an invalid command line dies
+Args parse_args(int argc, char** argv);
 
 // fitness.c
 // evaluate is the only way to call the run's fitness function (g_cfg.fitness), and it counts the

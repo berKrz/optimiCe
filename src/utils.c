@@ -71,11 +71,6 @@ void check_fits_int(int count, long long per_item, const char* what) {
   die_with_hint("%s is too large (at most %d elements per buffer)", what, INT_MAX);
 }
 
-void clear_screen(void) {
-  printf("\033[2J\033[H");
-  fflush(stdout);
-}
-
 void wait_for_enter(void) {
   if (!g_opts.interactive) return;
   printf("\n  [Press Enter to continue...]\n");

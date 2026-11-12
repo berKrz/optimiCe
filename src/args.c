@@ -78,7 +78,7 @@ static noreturn void die_option(const char* problem, const char* arg) {
   die_with_hint("%s: -%c", problem, optopt);
 }
 
-Batch parse_args(int argc, char** argv) {
+Args parse_args(int argc, char** argv) {
   static const struct option long_options[] = {
       {"config",      required_argument, NULL, 'f'},
       {"interactive", no_argument,       NULL, 'i'},
@@ -89,11 +89,8 @@ Batch parse_args(int argc, char** argv) {
       {NULL,          0,                 NULL, 0  },
   };
 
-  const char* config_path = NULL;
-  int         want_help   = 0;
-  int         want_config = 0;
-  int         want_output = 0;
-  const char* output_arg  = NULL;  // NULL with want_output: generate a name
+  Args args      = {0};
+  int  want_help = 0;
 
   // Short options are accepted in either case
   // The leading ':' makes getopt return ':' for a missing argument, apart from '?' for the rest
@@ -102,22 +99,22 @@ Batch parse_args(int argc, char** argv) {
   while ((c = getopt_long(argc, argv, ":f:F:iIlLdDo::O::hH", long_options, NULL)) != -1) {
     switch (c) {
       case 'f':
-      case 'F': config_path = optarg; break;
+      case 'F': args.config_path = optarg; break;
       case 'i':
       case 'I': g_opts.interactive = 1; break;
       case 'l':
       case 'L': print_list(); exit(EXIT_SUCCESS);
       case 'd':
-      case 'D': want_config = 1; break;
+      case 'D': args.dump_config = 1; break;
       case 'o':
       case 'O':
         // --output takes an optional value, but getopt only attaches one written as --output=FILE
         // or -oFILE: with "-o FILE", FILE would be left over as a stray argument. So take the
         // next argument ourselves, unless it starts with '-' (it's the next option, so -o came
-        // bare). A bare -o leaves output_arg NULL: a name is generated in the current directory
+        // bare). A bare -o leaves output_path NULL: a name is generated in the current directory
         if (!optarg && optind < argc && argv[optind][0] != '-') optarg = argv[optind++];
-        want_output = 1;
-        output_arg  = optarg;
+        args.output      = 1;
+        args.output_path = optarg;
         break;
       case 'h':
       case 'H': want_help = 1; break;
@@ -134,24 +131,7 @@ Batch parse_args(int argc, char** argv) {
   }
 
   if (optind < argc) die_with_hint("unexpected argument");
-  if (!config_path) die_with_hint("--config / -f is required");
+  if (!args.config_path) die_with_hint("--config / -f is required");
 
-  Batch batch = load_batch(config_path);
-  int   jobs  = batch_jobs(&batch);
-
-  // Checked before the dump: --dump-config only prints configs that would run
-  if (g_opts.interactive && jobs > 1)
-    die_with_hint("--interactive needs a single job (got %d run%s x %d replicate%s = %d)",
-                  batch.n_runs, batch.n_runs == 1 ? "" : "s", batch.replicates,
-                  batch.replicates == 1 ? "" : "s", jobs);
-  g_opts.per_iteration = jobs == 1;
-
-  if (want_config) {
-    dump_batch(&batch);
-    exit(EXIT_SUCCESS);
-  }
-  // Opened before the first job, so a bad path fails before any work; after the dump, so
-  // --dump-config never creates or truncates a file
-  if (want_output) output_open(&batch, config_path, output_arg);
-  return batch;
+  return args;
 }
