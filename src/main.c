@@ -2,10 +2,6 @@
 
 #include "common.h"
 
-_Thread_local Config g_cfg;
-
-Options g_opts;
-
 int main(int argc, char** argv) {
   Args  args  = parse_args(argc, argv);
   Batch batch = load_batch(args.config_path);

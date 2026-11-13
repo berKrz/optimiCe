@@ -158,6 +158,19 @@ void output_row(const char* label, int replicate, uint32_t seed, int n_dims, con
 void output_flush(void);
 void output_close(void);
 
+// report.c - the terminal lines of a multi-job batch
+// Column widths of a batch's job lines, so every line of the batch aligns
+typedef struct {
+  int label_w;
+  int rep_w;
+  int iter_w;  // digits of the largest iteration budget in the batch
+} JobLineWidths;
+
+void          print_batch_header(const Batch* batch, int n_threads);
+JobLineWidths job_line_widths(const Batch* batch);
+void print_job_line(const JobLineWidths* w, const char* label, int replicate, uint32_t seed,
+                    const RunResult* res);
+
 // batch.c
 int  batch_jobs(const Batch* ex);    // runs x replicates
 void load_run(const RunConfig* rc);  // copies both config images into this thread's cfgs

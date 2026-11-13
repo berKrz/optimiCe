@@ -6,6 +6,8 @@
 #include "algorithms.h"
 #include "common.h"
 
+Options g_opts;
+
 // One group per distinct scope, in order of first appearance in runner_fields
 static void print_runner_fields(void) {
   for (int i = 0; runner_fields[i].name; i++) {

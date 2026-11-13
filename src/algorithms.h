@@ -135,6 +135,9 @@ void walk_section(const char* source, Section section, toml_datum_t tab, const A
 // Prints the rows of `table` whose scope is exactly `scope`
 void print_help_from_table(const FieldSpec* table, unsigned scope);
 
+// Prints `name = value` for the rows of `table` a run can set, read through `base`
+void dump_fields(const FieldSpec* table, const void* base);
+
 // Writes the sections in `scope` as text, e.g. "[common] or [[run]]"
 void scope_text(unsigned scope, char* buf, size_t size);
 void set_defaults(const FieldSpec* table, void* base);

@@ -1,4 +1,3 @@
-#include <inttypes.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,53 +43,14 @@ static void run_job(const Batch* batch, int j, RunResult* out) {
 
 // --- Multi-job output ---
 
+// Keeps job lines in job order while jobs finish in any order
 typedef struct {
   const Batch*     batch;
   const RunResult* results;
   char*            done;    // done[j] = 1 once job j has finished
   int              cursor;  // next job to print
-  int              label_w;
-  int              rep_w;
-  int              iter_w;  // digits of the largest iteration budget in the batch
+  JobLineWidths    widths;
 } Printer;
-
-static int digits(int n) {
-  int d = 1;
-  while (n >= 10) n /= 10, d++;
-  return d;
-}
-
-static Printer printer_init(const Batch* batch, const RunResult* results, char* done) {
-  Printer p = {
-      .batch = batch, .results = results, .done = done, .rep_w = digits(batch->replicates - 1)};
-  for (int k = 0; k < batch->n_runs; k++) {
-    int w = (int) strlen(batch->runs[k].label);
-    if (w > p.label_w) p.label_w = w;
-    w = digits(batch->runs[k].cfg.iterations);
-    if (w > p.iter_w) p.iter_w = w;
-  }
-  return p;
-}
-
-static void print_job_line(const Printer* p, int j) {
-  const RunConfig* rc  = &p->batch->runs[j / p->batch->replicates];
-  const RunResult* res = &p->results[j];
-  int              r   = j % p->batch->replicates;
-
-  char fit[FMT_EXACT_LEN], best[FMT_EXACT_LEN + 8], evals[32];
-  fmt_exact(fit, res->fitness);
-  snprintf(best, sizeof(best), "best = %s", fit);
-  snprintf(evals, sizeof(evals), "evals %" PRIu64, res->evaluations);
-
-  // best is padded to its longest form, "best = " and 24 characters: -1.2345678901234567e-308
-  printf("%-*s  r%-*d  seed 0x%08x  %-31s  iters %-*d  ", p->label_w, rc->label, p->rep_w, r,
-         job_seed(p->batch, r), best, p->iter_w, res->stop.iterations);
-  switch (res->stop.reason) {
-    case STOP_NONE:       printf("%s\n", evals); break;
-    case STOP_TARGET:     printf("%-16s  target\n", evals); break;
-    case STOP_STAGNATION: printf("%-16s  stagnation\n", evals); break;
-  }
-}
 
 // The job's row in the --output file, if any; called right after its terminal line, so both come
 // out in job order
@@ -103,11 +63,14 @@ static void write_job_row(const Batch* batch, int j, const RunResult* res) {
 // Marks job j finished and prints every line the cursor can now reach: a line is printed once all
 // jobs before it have finished, so lines come out in job order as soon as they can
 static void job_finished(Printer* p, int j) {
-  int total  = batch_jobs(p->batch);
-  p->done[j] = 1;
+  const Batch* batch = p->batch;
+  int          total = batch_jobs(batch);
+  p->done[j]         = 1;
   while (p->cursor < total && p->done[p->cursor]) {
-    print_job_line(p, p->cursor);
-    write_job_row(p->batch, p->cursor, &p->results[p->cursor]);
+    int r = p->cursor % batch->replicates;
+    print_job_line(&p->widths, batch->runs[p->cursor / batch->replicates].label, r,
+                   job_seed(batch, r), &p->results[p->cursor]);
+    write_job_row(batch, p->cursor, &p->results[p->cursor]);
     p->cursor++;
   }
   fflush(stdout);
@@ -196,17 +159,11 @@ void run_batch(const Batch* batch) {
     write_job_row(batch, 0, &results[0]);
   } else {
     int n_threads = thread_count(total);
+    print_batch_header(batch, n_threads);
 
-    printf("Batch: %d run%s x %d replicate%s = %d jobs    Base seed: 0x%08x\n", batch->n_runs,
-           batch->n_runs == 1 ? "" : "s", batch->replicates, batch->replicates == 1 ? "" : "s",
-           total, batch->seed);
-    // The thread count depends on the machine, so it stays out of stdout
-    fflush(stdout);
-    fprintf(stderr, "Threads: %d\n", n_threads);
-    printf("\n");
-
-    Printer printer = printer_init(batch, results, done);
-    Pool    pool    = {.batch = batch, .results = results, .printer = &printer};
+    Printer printer = {
+        .batch = batch, .results = results, .done = done, .widths = job_line_widths(batch)};
+    Pool pool = {.batch = batch, .results = results, .printer = &printer};
     run_pool(&pool, n_threads);
   }
 
