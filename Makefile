@@ -19,12 +19,12 @@ TARGET   = optimice
 SRCDIR   = src
 BUILDDIR = build
 
-# Every .c file is built: a new source needs no entry here
+# Every .c file in src/ and its directories is built: a new source needs no entry here
 # An algorithm is one file, src/algorithms/<name>.c, defining `<name>_algorithm`. ALGOS is the
 # list of those names, sorted so the generated registry doesn't depend on directory order
+SRC      := $(sort $(wildcard $(SRCDIR)/*.c $(SRCDIR)/*/*.c))
 ALGO_SRC := $(sort $(wildcard $(SRCDIR)/algorithms/*.c))
 ALGOS    := $(notdir $(basename $(ALGO_SRC)))
-SRC      := $(sort $(wildcard $(SRCDIR)/*.c)) $(ALGO_SRC)
 OBJ       = $(SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 DEP       = $(OBJ:.o=.d)
 
@@ -59,8 +59,8 @@ $(BUILDDIR)/registry.h: FORCE
 	$(replace_if_changed)
 
 # Listed explicitly: on a first build there are no .d files yet to say who includes what
-$(BUILDDIR)/output.o: $(BUILDDIR)/version.h
-$(BUILDDIR)/registry.o: $(BUILDDIR)/registry.h
+$(BUILDDIR)/io/output.o: $(BUILDDIR)/version.h
+$(BUILDDIR)/core/registry.o: $(BUILDDIR)/registry.h
 
 $(TARGET): $(OBJ)
 	$(CC) $(BUILD_FLAGS) $(CFLAGS) -o $@ $^ $(LDLIBS)

@@ -87,7 +87,7 @@ static void set_field(const char* source, const FieldSpec* row, void* base, toml
       return;
     }
     case FIELD_ALGORITHM:
-      // Unreachable: walk_section skips the algorithm row, which toml.c's pre-pass resolves
+      // Unreachable: walk_section skips the algorithm row, which load.c's pre-pass resolves
       die("internal: FIELD_ALGORITHM reached set_field");
     case FIELD_DOUBLE_LIST: {
       if (d.type != TOML_ARRAY) die_at(source, row->name, "expected array of numbers");
@@ -216,7 +216,7 @@ void walk_section(const char* source, Section section, toml_datum_t tab, const A
       die_at(source, key, "only allowed in %s", where);
     }
 
-    if (row->type == FIELD_ALGORITHM) continue;  // resolved by toml.c's pre-pass
+    if (row->type == FIELD_ALGORITHM) continue;  // resolved by load.c's pre-pass
     set_field(source, row, base, tab.u.tab.value[i]);
   }
 }

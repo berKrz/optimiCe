@@ -143,7 +143,7 @@ int      rng_next_bit(void);
 void validate(void);
 void dump_config(void);
 
-// toml.c - parses, merges and validates every [[run]]; the TOML tree is freed on return
+// load.c - parses, merges and validates every [[run]]; the TOML tree is freed on return
 Batch load_batch(const char* filename);
 
 // output.c - the --output results file

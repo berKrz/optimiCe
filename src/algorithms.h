@@ -129,7 +129,7 @@ void check_bounds_mode(BoundsMode mode);
 // (written into g_cfg) and, when `algo` is given, the algorithm's own fields (written into its cfg)
 // `algo` is given for [[run]] and [defaults.<algo>], NULL for [common]
 // Dies on unknown keys and on keys whose scope excludes `section`
-// `algorithm` itself is skipped: toml.c's pre-pass resolves it before any walk
+// `algorithm` itself is skipped: load.c's pre-pass resolves it before any walk
 void walk_section(const char* source, Section section, toml_datum_t tab, const Algorithm* algo);
 
 // Prints the rows of `table` whose scope is exactly `scope`
