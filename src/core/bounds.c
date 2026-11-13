@@ -1,7 +1,6 @@
 #include <math.h>
 
-#include "algorithms.h"
-#include "common.h"
+#include "algorithms/algorithm.h"
 
 // Shared out-of-domain handling for algorithms that move points in continuous space
 // GA never needs it: its decode always lands inside [domain_min, domain_max]

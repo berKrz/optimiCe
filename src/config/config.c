@@ -2,8 +2,8 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#include "algorithms.h"
-#include "common.h"
+#include "config/config.h"
+#include "core/core.h"
 
 _Thread_local Config g_cfg;
 

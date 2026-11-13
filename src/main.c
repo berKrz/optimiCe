@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
-#include "common.h"
+#include "core/core.h"
+#include "io/io.h"
 
 int main(int argc, char** argv) {
   Args  args  = parse_args(argc, argv);

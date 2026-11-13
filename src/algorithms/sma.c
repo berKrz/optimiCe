@@ -5,8 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "algorithms.h"
-#include "common.h"
+#include "algorithm.h"
 
 // --- SMA-private config state ---
 

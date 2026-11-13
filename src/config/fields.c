@@ -7,8 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "algorithms.h"
-#include "common.h"
+#include "config/config.h"
+#include "core/core.h"
 
 static void         set_field(const char* source, const FieldSpec* row, void* base, toml_datum_t d);
 static toml_datum_t default_as_datum(const FieldSpec* row);

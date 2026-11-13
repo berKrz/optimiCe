@@ -5,8 +5,9 @@
 #include <threads.h>
 #include <unistd.h>
 
-#include "algorithms.h"
-#include "common.h"
+#include "config/config.h"
+#include "core/core.h"
+#include "io/io.h"
 
 // Runs every job of a loaded Batch and prints its results
 // Job j is run j / replicates, replicate j % replicates; results land in results[j], and lines
@@ -16,7 +17,8 @@
 
 int batch_jobs(const Batch* batch) { return batch->n_runs * batch->replicates; }
 
-void load_run(const RunConfig* rc) {
+// Copies both config images of a run into this thread's cfgs
+static void load_run(const RunConfig* rc) {
   const Algorithm* algo = rc->cfg.algorithm;
   g_cfg                 = rc->cfg;
   memcpy(algo->cfg_base(), rc->algo_cfg, algo->cfg_size);

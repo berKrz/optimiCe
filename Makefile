@@ -9,8 +9,11 @@ TOML_LIBS   := $(shell $(PKG_CONFIG) --libs   libtomlc17 2>/dev/null || echo -lt
 # CFLAGS is the part meant to be overridden (`make CFLAGS="-O0 -g"`); BUILD_FLAGS is what the
 # build needs whatever CFLAGS says
 CFLAGS      ?= -O2 -g -Wall -Wextra
+# Calling an undeclared function is an error, not a warning: it's what keeps a file from using
+# anything outside the headers it includes
 BUILD_FLAGS  = -std=c11 -pthread -I$(SRCDIR) -I$(BUILDDIR) -D_GNU_SOURCE -MMD -MP \
-               -finput-charset=UTF-8 -fexec-charset=UTF-8 $(TOML_CFLAGS)
+               -finput-charset=UTF-8 -fexec-charset=UTF-8 \
+               -Werror=implicit-function-declaration $(TOML_CFLAGS)
 LDLIBS       = -lm $(TOML_LIBS)
 
 # Everything the build produces goes under BUILDDIR, mirroring SRCDIR: objects, dependency files

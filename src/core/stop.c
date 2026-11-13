@@ -1,7 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 
-#include "common.h"
+#include "algorithms/algorithm.h"
 
 int is_better(double a, double b) { return g_cfg.direction == MINIMIZE ? a < b : a > b; }
 

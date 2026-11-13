@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "common.h"
+#include "core/core.h"
 
 _Thread_local const char* g_where;
 

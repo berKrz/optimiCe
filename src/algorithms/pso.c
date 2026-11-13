@@ -3,8 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "algorithms.h"
-#include "common.h"
+#include "algorithm.h"
 
 // --- PSO-private config state ---
 

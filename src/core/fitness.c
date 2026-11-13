@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "common.h"
+#include "core/core.h"
 
 // A catalog entry. The struct is defined here and nowhere else, so no other file can reach `fn`:
 // evaluate is the only caller of a fitness function, and no call goes uncounted

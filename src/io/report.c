@@ -3,8 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "algorithms.h"
-#include "common.h"
+#include "io/io.h"
 
 void wait_for_enter(void) {
   if (!g_opts.interactive) return;

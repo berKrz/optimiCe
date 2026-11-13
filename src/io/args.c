@@ -3,8 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "algorithms.h"
-#include "common.h"
+#include "config/config.h"
+#include "core/core.h"
+#include "io/io.h"
 
 Options g_opts;
 

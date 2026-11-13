@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "algorithms.h"
+#include "core/core.h"
 
 // Defines `algorithms[]`, the NULL-terminated registry: one entry per file in src/algorithms/, in
 // alphabetical order. The Makefile writes the header from the file names

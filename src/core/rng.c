@@ -2,7 +2,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "common.h"
+#include "core/core.h"
 
 // xoshiro256** (Blackman & Vigna), state seeded through splitmix64
 // The state is _Thread_local: every thread draws from its own stream, so a run's numbers depend
