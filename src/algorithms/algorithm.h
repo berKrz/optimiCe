@@ -214,6 +214,9 @@ typedef struct {
   int         value;
 } EnumEntry;
 
+// The name `table` maps to `value`, or "?" if none does
+const char* enum_name(const EnumEntry* table, int value);
+
 // --- Bounds ---
 
 // Out-of-domain handling shared by continuous-position algorithms

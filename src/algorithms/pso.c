@@ -2,10 +2,11 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "algorithm.h"
 
-// --- PSO-private config state ---
+// --- Config ---
 
 typedef enum { PBEST_POSITION, PBEST_RANDOM } PbestInit;
 typedef enum { GBEST_ASYNC, GBEST_SYNC } GbestUpdate;
@@ -56,7 +57,7 @@ static const FieldSpec pso_fields[] = {
 
 static void* pso_cfg_base(void) { return &cfg; }
 
-// --- Validation ---
+// --- Validate ---
 
 static void pso_validate(void) {
   if (cfg.swarm_size <= 0) die_with_hint("swarm_size must be positive");
@@ -72,13 +73,12 @@ static void pso_validate(void) {
   check_fits_int(cfg.swarm_size, 3LL * g_cfg.n_dims, "swarm_size x n_dims");
 }
 
-// --- Particle layout ---
-//
+// --- State ---
+
 // All particles share one flat buffer, carved per-particle contiguous:
 //   [p0.pos | p0.vel | p0.pbest | p1.pos | p1.vel | p1.pbest | ...]
 // Each slot is n_dims doubles. The pointers in Particle index into it
-// Access is swarm[i].pos[d]
-
+// Access is swarm->particles[i].pos[d]
 typedef struct {
   double* pos;
   double* vel;
@@ -88,50 +88,82 @@ typedef struct {
   int     pbest_updated;
 } Particle;
 
-// --- Internals ---
+typedef struct {
+  Particle* particles;  // swarm_size
+  double*   data;       // the buffer the particles point into
+  double*   gbest_pos;  // n_dims; always some particle's pbest
+  double    gbest_fitness;
+  double    v_cap;  // largest velocity component allowed; 0 when there's no cap
+} Swarm;
 
-static void copy_pos(double* dst, const double* src) {
-  for (int d = 0; d < g_cfg.n_dims; d++) dst[d] = src[d];
+static Swarm swarm_alloc(void) {
+  size_t n = (size_t) cfg.swarm_size, dims = (size_t) g_cfg.n_dims;
+  return (Swarm) {
+      .particles = xmalloc(n * sizeof(Particle)),
+      .data      = xmalloc(n * 3 * dims * sizeof(double)),
+      .gbest_pos = xmalloc(dims * sizeof(double)),
+  };
 }
 
-static void update_gbest(const Particle* p, double* gbest_pos, double* gbest_fitness) {
-  if (is_better(p->pbest_fitness, *gbest_fitness)) {
-    *gbest_fitness = p->pbest_fitness;
-    copy_pos(gbest_pos, p->pbest);
+static void swarm_free(Swarm* swarm) {
+  free(swarm->gbest_pos);
+  free(swarm->data);
+  free(swarm->particles);
+}
+
+// --- Steps ---
+
+static void copy_pos(double* dst, const double* src) {
+  memcpy(dst, src, (size_t) g_cfg.n_dims * sizeof(double));
+}
+
+static void update_gbest(Swarm* swarm, const Particle* p) {
+  if (is_better(p->pbest_fitness, swarm->gbest_fitness)) {
+    swarm->gbest_fitness = p->pbest_fitness;
+    copy_pos(swarm->gbest_pos, p->pbest);
   }
 }
 
-static void init_swarm(Particle* swarm, double* data, double* gbest_pos, double* gbest_fitness) {
-  int per_particle = 3 * g_cfg.n_dims;
+// v_max is a fraction of the domain's width; an unbounded domain has none, so the init range's
+// stands in as the scale of the search
+static double velocity_cap(void) {
+  int    bounded = isfinite(g_cfg.domain_min) && isfinite(g_cfg.domain_max);
+  double width   = bounded ? g_cfg.domain_max - g_cfg.domain_min : g_cfg.init_max - g_cfg.init_min;
+  return cfg.v_max * width;
+}
+
+static void init_swarm(Swarm* swarm) {
+  swarm->v_cap = velocity_cap();
 
   for (int i = 0; i < cfg.swarm_size; i++) {
-    double* slot           = data + i * per_particle;
-    swarm[i].pos           = slot;
-    swarm[i].vel           = slot + g_cfg.n_dims;
-    swarm[i].pbest         = slot + 2 * g_cfg.n_dims;
-    swarm[i].pbest_updated = 0;
+    Particle* p      = &swarm->particles[i];
+    double*   slot   = swarm->data + i * 3 * g_cfg.n_dims;
+    p->pos           = slot;
+    p->vel           = slot + g_cfg.n_dims;
+    p->pbest         = slot + 2 * g_cfg.n_dims;
+    p->pbest_updated = 0;
 
     for (int d = 0; d < g_cfg.n_dims; d++) {
-      swarm[i].pos[d] = rng_next_double_range(g_cfg.init_min, g_cfg.init_max);
-      swarm[i].vel[d] = 0.0;
+      p->pos[d] = rng_next_double_range(g_cfg.init_min, g_cfg.init_max);
+      p->vel[d] = 0.0;
     }
 
-    swarm[i].fitness = evaluate(swarm[i].pos);
+    p->fitness = evaluate(p->pos);
 
     if (cfg.pbest_init == PBEST_POSITION) {
-      copy_pos(swarm[i].pbest, swarm[i].pos);
-      swarm[i].pbest_fitness = swarm[i].fitness;
+      copy_pos(p->pbest, p->pos);
+      p->pbest_fitness = p->fitness;
     } else {
       for (int d = 0; d < g_cfg.n_dims; d++)
-        swarm[i].pbest[d] = rng_next_double_range(g_cfg.init_min, g_cfg.init_max);
-      swarm[i].pbest_fitness = evaluate(swarm[i].pbest);
+        p->pbest[d] = rng_next_double_range(g_cfg.init_min, g_cfg.init_max);
+      p->pbest_fitness = evaluate(p->pbest);
     }
   }
 
   // The first particle seeds gbest, so gbest is always some particle's pbest, never a placeholder
-  *gbest_fitness = swarm[0].pbest_fitness;
-  copy_pos(gbest_pos, swarm[0].pbest);
-  for (int i = 1; i < cfg.swarm_size; i++) update_gbest(&swarm[i], gbest_pos, gbest_fitness);
+  swarm->gbest_fitness = swarm->particles[0].pbest_fitness;
+  copy_pos(swarm->gbest_pos, swarm->particles[0].pbest);
+  for (int i = 1; i < cfg.swarm_size; i++) update_gbest(swarm, &swarm->particles[i]);
 }
 
 // Inertia for iteration `iter` (0-based): linear from w at the first iteration to w_end at the
@@ -142,51 +174,46 @@ static double inertia(int iter) {
   return cfg.w + (cfg.w_end - cfg.w) * frac;
 }
 
-static void update_swarm(Particle* swarm, double* gbest_pos, double* gbest_fitness, double w) {
-  // v_max is a fraction of the domain's width; an unbounded domain has none, so the init range's
-  // stands in as the scale of the search
-  int    bounded = isfinite(g_cfg.domain_min) && isfinite(g_cfg.domain_max);
-  double width   = bounded ? g_cfg.domain_max - g_cfg.domain_min : g_cfg.init_max - g_cfg.init_min;
-  double v_cap   = cfg.v_max * width;  // 0 when disabled
-
+static void update_swarm(Swarm* swarm, double w) {
   for (int i = 0; i < cfg.swarm_size; i++) {
-    swarm[i].pbest_updated = 0;
+    Particle* p      = &swarm->particles[i];
+    p->pbest_updated = 0;
 
     for (int d = 0; d < g_cfg.n_dims; d++) {
       double r1 = rng_next_double();
       double r2 = rng_next_double();
 
-      swarm[i].vel[d] = w * swarm[i].vel[d] + cfg.c1 * r1 * (swarm[i].pbest[d] - swarm[i].pos[d]) +
-                        cfg.c2 * r2 * (gbest_pos[d] - swarm[i].pos[d]);
+      p->vel[d] = w * p->vel[d] + cfg.c1 * r1 * (p->pbest[d] - p->pos[d]) +
+                  cfg.c2 * r2 * (swarm->gbest_pos[d] - p->pos[d]);
 
-      if (v_cap > 0.0) {
-        if (swarm[i].vel[d] > v_cap) swarm[i].vel[d] = v_cap;
-        else if (swarm[i].vel[d] < -v_cap) swarm[i].vel[d] = -v_cap;
+      if (swarm->v_cap > 0.0) {
+        if (p->vel[d] > swarm->v_cap) p->vel[d] = swarm->v_cap;
+        else if (p->vel[d] < -swarm->v_cap) p->vel[d] = -swarm->v_cap;
       }
 
-      swarm[i].pos[d] += swarm[i].vel[d];
-      apply_bounds(&swarm[i].pos[d], &swarm[i].vel[d], cfg.bounds);
+      p->pos[d] += p->vel[d];
+      apply_bounds(&p->pos[d], &p->vel[d], cfg.bounds);
     }
 
-    swarm[i].fitness = evaluate(swarm[i].pos);
+    p->fitness = evaluate(p->pos);
 
-    if (is_better(swarm[i].fitness, swarm[i].pbest_fitness)) {
-      swarm[i].pbest_fitness = swarm[i].fitness;
-      copy_pos(swarm[i].pbest, swarm[i].pos);
-      swarm[i].pbest_updated = 1;
+    if (is_better(p->fitness, p->pbest_fitness)) {
+      p->pbest_fitness = p->fitness;
+      copy_pos(p->pbest, p->pos);
+      p->pbest_updated = 1;
     }
 
     // Async: gbest moves as soon as any particle improves it, so later particles in the same
     // iteration already steer toward the new best
-    if (cfg.gbest_update == GBEST_ASYNC) update_gbest(&swarm[i], gbest_pos, gbest_fitness);
+    if (cfg.gbest_update == GBEST_ASYNC) update_gbest(swarm, p);
   }
 
   // Sync: every particle moved against the gbest from the start of the iteration; refresh it once
   if (cfg.gbest_update == GBEST_SYNC)
-    for (int i = 0; i < cfg.swarm_size; i++) update_gbest(&swarm[i], gbest_pos, gbest_fitness);
+    for (int i = 0; i < cfg.swarm_size; i++) update_gbest(swarm, &swarm->particles[i]);
 }
 
-// --- Presentation ---
+// --- Interactive output ---
 
 static void print_particle(const Particle* p, int index, double gbest_fitness) {
   int is_gbest_holder = (p->pbest_fitness == gbest_fitness);
@@ -208,52 +235,44 @@ static void print_particle(const Particle* p, int index, double gbest_fitness) {
   printf("     fitness = %g   pbest = %g\n\n", p->fitness, p->pbest_fitness);
 }
 
-static void print_swarm(const Particle* swarm, double gbest_fitness) {
-  for (int i = 0; i < cfg.swarm_size; i++) print_particle(&swarm[i], i, gbest_fitness);
-  printf("gbest = %g\n", gbest_fitness);
+// The whole swarm, then a pause
+static void show_swarm(const Swarm* swarm) {
+  for (int i = 0; i < cfg.swarm_size; i++)
+    print_particle(&swarm->particles[i], i, swarm->gbest_fitness);
+  printf("gbest = %g\n", swarm->gbest_fitness);
+  wait_for_enter();
+  print_separator();
 }
 
 // --- Entry point ---
 
 static void pso_run(RunResult* out) {
-  int per_particle = 3 * g_cfg.n_dims;
-
-  double*   data      = xmalloc((size_t) cfg.swarm_size * per_particle * sizeof(double));
-  Particle* swarm     = xmalloc((size_t) cfg.swarm_size * sizeof(Particle));
-  double*   gbest_pos = xmalloc((size_t) g_cfg.n_dims * sizeof(double));
-  double    gbest_fitness;
-
-  init_swarm(swarm, data, gbest_pos, &gbest_fitness);
+  Swarm swarm = swarm_alloc();
+  init_swarm(&swarm);
 
   if (g_opts.interactive) {
     printf("Initial Swarm\n\n");
-    print_swarm(swarm, gbest_fitness);
-    wait_for_enter();
-    print_separator();
+    show_swarm(&swarm);
   }
 
   StopState stop = stop_init();
   for (int i = 0; i < g_cfg.iterations; i++) {
     double w = inertia(i);
-    update_swarm(swarm, gbest_pos, &gbest_fitness, w);
+    update_swarm(&swarm, w);
 
     if (g_opts.interactive) {
       print_iteration_header(i);
       if (cfg.w_end != cfg.w) printf("w = %g\n\n", w);
-      print_swarm(swarm, gbest_fitness);
-      wait_for_enter();
-      print_separator();
+      show_swarm(&swarm);
     }
-    if (end_iteration(&stop, gbest_fitness)) break;
+    if (end_iteration(&stop, swarm.gbest_fitness)) break;
   }
 
-  copy_pos(out->pos, gbest_pos);
-  out->fitness = gbest_fitness;
+  copy_pos(out->pos, swarm.gbest_pos);
+  out->fitness = swarm.gbest_fitness;
   out->stop    = stop;
 
-  free(gbest_pos);
-  free(swarm);
-  free(data);
+  swarm_free(&swarm);
 }
 
 const Algorithm pso_algorithm = {

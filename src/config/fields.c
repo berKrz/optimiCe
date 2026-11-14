@@ -281,8 +281,7 @@ void print_help_from_table(const FieldSpec* table, unsigned scope) {
 
 // --- Dump ---
 
-// The name `table` maps to `value`, or "?" if none does
-static const char* enum_name(const EnumEntry* table, int value) {
+const char* enum_name(const EnumEntry* table, int value) {
   for (int i = 0; table[i].name; i++)
     if (table[i].value == value) return table[i].name;
   return "?";
