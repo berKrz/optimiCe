@@ -31,6 +31,12 @@ const FitnessEntry* fitness_find(const char* name);
 const char*         fitness_name(const FitnessEntry* entry);
 // Dies unless g_cfg's n_dims and domain are ones g_cfg.fitness is defined for
 void fitness_check(void);
+// The catalog's i-th entry, or NULL past the end
+const FitnessEntry* fitness_at(int i);
+// Writes an entry's limits as --list shows them, e.g. n_dims "2 or more" and domain
+// "within [-5, 5]"; "any" when there's no limit. Both buffers hold FITNESS_LIMIT_LEN chars
+#define FITNESS_LIMIT_LEN 64
+void fitness_limits_text(const FitnessEntry* entry, char* dims, char* domain);
 // Prints the catalog for --list: one line per function, its name and its limits
 void fitness_print_catalog(void);
 
