@@ -26,8 +26,6 @@ Batch load_batch(const char* filename) {
   toml_result_t result = toml_parse_file_ex(filename);
   if (!result.ok) die_with_hint("parse error in '%s': %s", filename, result.errmsg);
 
-  // TOML parsers reject duplicate keys within a table at parse time
-
   // --- Top-level: only [common], [defaults.<algo>] and [[run]] are allowed ---
 
   for (int i = 0; i < result.toptab.u.tab.size; i++) {

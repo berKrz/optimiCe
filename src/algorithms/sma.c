@@ -151,8 +151,8 @@ static void move_slimes(Population* pop, int iter) {
     double* w = weights_of(pop, i);
 
     if (rng_next_double() < cfg.z) {
-      // Whole-slime re-init - one draw per slime
-      // A re-initialization, so it draws from the init range, like the initial population
+      // Whole-slime re-init, decided by one draw per slime
+      // It draws from the init range, like the initial population
       for (int d = 0; d < g_cfg.n_dims; d++)
         x[d] = rng_next_double_range(g_cfg.init_min, g_cfg.init_max);
     } else {

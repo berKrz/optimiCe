@@ -9,15 +9,9 @@
 #include "core/core.h"
 #include "io/io.h"
 
-// Runs every job of a loaded Batch and prints its results
-// Job j is run j / replicates, replicate j % replicates; results land in results[j], and lines
-// are printed in job order (see job_finished), so the output doesn't depend on finishing order
-// Jobs run in parallel on min(jobs, CPU cores) threads. A job only touches its own thread's state
-// (g_cfg, the algorithm's cfg, the RNG, g_where) and its own results[j]; the Batch is read-only
-
 int batch_jobs(const Batch* batch) { return batch->n_runs * batch->replicates; }
 
-// Copies both config images of a run into this thread's cfgs
+// Copies a run's two configs into this thread's g_cfg and algorithm cfg
 static void load_run(const RunConfig* rc) {
   const Algorithm* algo = rc->cfg.algorithm;
   g_cfg                 = rc->cfg;
@@ -79,10 +73,11 @@ static void job_finished(Printer* p, int j) {
 }
 
 // --- Worker pool ---
-//
+
 // Every job is known up front, so the pool is a shared counter: each worker takes the next job
-// number, runs it, and takes another until none remain, then exits
-// Workers never wait for each other; the mutex only guards the printer
+// number, runs it, and takes another until none remain
+// A job only touches its own thread's state (g_cfg, the algorithm's cfg, the RNG, g_where) and
+// its own results[j], so workers never wait for each other; the mutex only guards the printer
 
 typedef struct {
   const Batch* batch;

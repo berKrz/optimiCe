@@ -129,12 +129,10 @@ static void ga_validate(void) {
 
 // --- State ---
 
-// Bit-packed individuals
-// The population is one flat uint64_t[pop_size * words_per_ind]. Each
-// individual gets n_dims * ind_size contiguous bits (little-endian within
-// its own slice: bit b of dimension d lives at global index d * ind_size + b).
-// Decoded dimensions come out as unsigned integers in [0, 2^ind_size - 1],
-// then linearly mapped onto [domain_min, domain_max]
+// Individuals are bit-packed: the population is one flat uint64_t[pop_size * words_per_ind]
+// Each individual is n_dims * ind_size contiguous bits; bit b of dimension d is at index
+// d * ind_size + b, least significant first
+// A dimension's bits are read as an unsigned integer, then mapped linearly onto the domain
 
 static int total_bits(void) { return g_cfg.n_dims * cfg.ind_size; }
 
@@ -256,10 +254,8 @@ static uint64_t* individual(const Population* pop, int i) {
 // --- Steps ---
 
 // Decodes `ind` and returns its fitness
-// The GA's only call to evaluate - every individual's fitness is cached in `fit`, next to the
-// population, and this runs once per individual, when it's created: at init, and after crossover
-// and mutation, everything else (selection, elitism, the progress line, the result, the
-// interactive printers) reads the cache
+// The GA's only call to evaluate: it runs once per individual, when the individual is created (at
+// init, and after crossover and mutation). Everything else reads the fitness cached in `fit`
 static double evaluate_individual(const Population* pop, const uint64_t* ind) {
   decode(ind, pop->pos);
   return evaluate(pop->pos);
@@ -297,8 +293,8 @@ static void init_population(Population* pop) {
   for (int i = 0; i < cfg.pop_size; i++) pop->fit[i] = evaluate_individual(pop, individual(pop, i));
 }
 
-// Wheel weights: each turns raw fitness into non-negative weights that grow
-// All of them fill `weights` (pop_size entries) from `fits` and are direction-aware
+// Wheel weights: each function turns fitness into non-negative weights, larger for better
+// individuals in the run's direction. All fill `weights` (n entries) from `fits`
 
 static void fitness_range(const double* fits, int n, double* min_fit, double* max_fit) {
   *min_fit = *max_fit = fits[0];
@@ -337,7 +333,7 @@ static void weights_roulette_normalized(const double* fits, double* weights, int
   }
 }
 
-// rank: linear ranking (Baker) - individuals are sorted worst to best and weighted by position
+// rank: linear ranking (Baker). Individuals are sorted worst to best and weighted by position
 // alone, w = (2 - s) + 2 (s - 1) r / (n - 1) for rank r in [0, n - 1], s = rank_pressure
 // Weights average 1, so each is the individual's expected number of copies: s for the best,
 // 2 - s for the worst
@@ -429,7 +425,7 @@ static inline void swap_bit(uint64_t* a, uint64_t* b, int gi) {
 
 // Dimension-aware n-point crossover: within each dimension's slice, the cuts split the bits into
 // segments that alternate keep / swap, starting with keep
-// With one cut this is single-point bits [cut, ind_size) are swapped
+// With one cut this is single-point crossover: bits [cut, ind_size) are swapped
 static void crossover_n_point(uint64_t* a, uint64_t* b) {
   const DoubleList* c = &cfg.cut_points;
   for (int d = 0; d < g_cfg.n_dims; d++) {
@@ -538,7 +534,7 @@ static void family_compete_single(Population* pop, int i) {
 // Under family elitism, each pair then competes with its parents (see family_compete)
 // RNG draws happen in the same order with or without elitism: crossover, then mutation of each
 // child, pair by pair
-// On entry `fit` holds the selected parents' fitness; on return, that of whatever fills each slot.
+// On entry `fit` holds the selected parents' fitness; on return, that of whatever fills each slot
 // Every child is evaluated exactly once, whether or not crossover or mutation changed it
 static void reproduce(Population* pop) {
   size_t ind_bytes = (size_t) words_per_ind() * sizeof(uint64_t);

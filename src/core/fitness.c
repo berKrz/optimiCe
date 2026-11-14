@@ -90,15 +90,9 @@ static double schaffer_f6(const double* pos) {
 
 // --- Catalog ---
 
-// The available fitness functions, by config name. NULL-terminated
-// config.c's "fitness" handler resolves a name to its entry with fitness_find, and g_cfg.fitness
-// then points at it
-//
+// The available fitness functions, by config name; NULL-terminated
 // A function must not return NaN for finite coordinates: nothing compares better or worse than
-// NaN, so the algorithms' best tracking relies on it. Overflowing to an infinity is fine
-//
-// n_dims_min & n_dims_max: 0 means unbounded on that side.
-// domain_lo & domain_hi:   -/+INFINITY mean unbounded on that side.
+// NaN, and the algorithms' best tracking relies on that. Overflowing to an infinity is fine
 static const FitnessEntry fitness_table[] = {
     {"sphere",      sphere,      0, 0, -INFINITY, INFINITY},
     {"rosenbrock",  rosenbrock,  2, 0, -INFINITY, INFINITY},

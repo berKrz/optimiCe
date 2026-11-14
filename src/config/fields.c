@@ -57,8 +57,8 @@ static void set_field(const char* source, const FieldSpec* row, void* base, toml
       return;
     }
     case FIELD_ENUM: {
-      // Enum-typed struct members are written as int - assumes enums are int-sized, which holds
-      // on GCC/Clang unless -fshort-enums is passed
+      // Enum members are written as int. That assumes enums are int-sized, which holds on GCC
+      // and Clang unless -fshort-enums is passed
       if (d.type != TOML_STRING) die_at(source, row->name, "expected string");
       const EnumEntry* t = row->lookup;
       for (int i = 0; t[i].name; i++) {
@@ -130,14 +130,13 @@ static toml_datum_t default_as_datum(const FieldSpec* row) {
     case FIELD_ENUM:
     case FIELD_FITNESS: {
       d.type = TOML_STRING;
-      // default_display is a string literal; set_field only reads .u.s,
-      // and the synthesized datum never reaches tomlc17's free path
+      // default_display is a string literal: set_field only reads .u.s, and this datum never
+      // reaches tomlc17's free path
       d.u.s = (char*) row->default_display;
       return d;
     }
     case FIELD_ALGORITHM:
-      // Unreachable: caller (set_defaults) skips rows with NULL default_display,
-      // and FIELD_ALGORITHM has no default
+      // Unreachable: set_defaults skips rows without a default, and this one has none
       die("internal: FIELD_ALGORITHM has no default");
     case FIELD_DOUBLE_LIST:
       // Unreachable: set_defaults routes list rows through set_list_default, since an array
@@ -287,9 +286,7 @@ const char* enum_name(const EnumEntry* table, int value) {
   return "?";
 }
 
-// Prints `name = value` for the rows of `table` a run can set, reading each value through
-// `base + offset` by the row's type: the reverse of set_field. Names are padded to the longest
-// [common]-only rows (seed, replicates) are batch-wide and skipped; dump_batch prints them
+// The reverse of set_field: each value is read by its row's type. Names are padded to the longest
 void dump_fields(const FieldSpec* table, const void* base) {
   int width = 0;
   for (int i = 0; table[i].name; i++) {

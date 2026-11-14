@@ -75,7 +75,7 @@ static FILE* open_generated(const char* dir, const char* config_path, const stru
 }
 
 // --- Config checksum ---
-//
+
 // POSIX cksum: CRC-32 over the file's bytes, then over its length in as few bytes as it takes,
 // least significant first; the result is complemented
 // Matches `cksum FILE`, so anyone can check the header against a TOML without optimiCe
@@ -146,8 +146,8 @@ void output_open(const Batch* batch, const char* config_path, const char* arg) {
 }
 
 // One row per job
-// Every field is free of commas and quotes (labels are <algorithm>-<n>, numbers,
-// fixed words), so nothing needs quoting; position's coordinates are separated by spaces, which
+// No field contains a comma or a quote (labels are <algorithm>-<n>, the rest numbers and fixed
+// words), so nothing needs quoting. The position's coordinates are separated by spaces, which
 // keeps it one column whatever n_dims is
 // Flushed per row, so a batch that dies or is killed leaves every finished row on disk
 void output_row(const char* label, int replicate, uint32_t seed, int n_dims, const RunResult* res) {
