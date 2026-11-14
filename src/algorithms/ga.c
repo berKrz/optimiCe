@@ -283,14 +283,9 @@ static void mutation(uint64_t* ind, int index) {
 // Selection copies the population and its fitness into `aux` and `fits`, wheel selections fill
 // `weights` (and `order` for rank), and `tmp` is the decode scratch
 typedef struct {
-  double fit;
-  int    idx;
-} FitIdx;
-
-typedef struct {
   double*   fits;     // pop_size
   double*   weights;  // pop_size
-  FitIdx*   order;    // pop_size, rank's sort buffer
+  Ranked*   order;    // pop_size, rank's sort buffer
   int*      picked;   // pop_size, picked[i] = which `aux` / `fits` entry selection put in slot i
   uint64_t* aux;      // pop_size * words, pre-selection copy of the population
   uint64_t* family;   // 4 * words, parents + children of the pair under family elitism
@@ -302,7 +297,7 @@ static GaWork work_alloc(void) {
   GaWork w = {
       .fits    = xmalloc(n * sizeof(double)),
       .weights = xmalloc(n * sizeof(double)),
-      .order   = xmalloc(n * sizeof(FitIdx)),
+      .order   = xmalloc(n * sizeof(Ranked)),
       .picked  = xmalloc(n * sizeof(int)),
       .aux     = xmalloc(n * (size_t) words_per_ind() * sizeof(uint64_t)),
       .family  = xmalloc(4 * (size_t) words_per_ind() * sizeof(uint64_t)),
@@ -369,22 +364,13 @@ static void weights_roulette_normalized(const double* fits, double* weights, int
 // alone, w = (2 - s) + 2 (s - 1) r / (n - 1) for rank r in [0, n - 1], s = rank_pressure
 // Weights average 1, so each is the individual's expected number of copies: s for the best,
 // 2 - s for the worst
-// Worst first, ties broken by index
-static int cmp_worst_first(const void* pa, const void* pb) {
-  const FitIdx* a = pa;
-  const FitIdx* b = pb;
-  if (a->fit != b->fit) return is_better(a->fit, b->fit) ? 1 : -1;
-  return (a->idx > b->idx) - (a->idx < b->idx);
-}
-
 // `order` is caller-provided sort space (n entries)
-static void weights_rank(const double* fits, double* weights, FitIdx* order, int n) {
-  for (int i = 0; i < n; i++) order[i] = (FitIdx) {fits[i], i};
-  qsort(order, n, sizeof(FitIdx), cmp_worst_first);
+static void weights_rank(const double* fits, double* weights, Ranked* order, int n) {
+  rank_by_fitness(fits, n, order, RANK_WORST_FIRST);
 
   const double s = cfg.rank_pressure;
   for (int r = 0; r < n; r++)
-    weights[order[r].idx] = (2.0 - s) + 2.0 * (s - 1.0) * r / (n - 1);  // n >= 2 by validation
+    weights[order[r].index] = (2.0 - s) + 2.0 * (s - 1.0) * r / (n - 1);  // n >= 2 by validation
 }
 
 // Fitness-proportional draw over precomputed weights: pop_size spins, each copying the

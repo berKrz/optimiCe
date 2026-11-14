@@ -40,30 +40,6 @@ static void sma_validate(void) {
   check_fits_int(cfg.pop_size, 2LL * g_cfg.n_dims + 1, "pop_size x n_dims");
 }
 
-// --- Fitness ranking ---
-//
-// SMA needs the best and worst fitness this iteration, plus a top/bottom split for the weight
-// formula
-// We rank by sorting (fitness, index) pairs, keeping positions in place and reading them
-// through the index after the sort
-
-typedef struct {
-  double fit;
-  int    idx;
-} FitIdx;
-
-static int cmp_min(const void* a, const void* b) {
-  double fa = ((const FitIdx*) a)->fit;
-  double fb = ((const FitIdx*) b)->fit;
-  return (fa > fb) - (fa < fb);
-}
-
-static int cmp_max(const void* a, const void* b) {
-  double fa = ((const FitIdx*) a)->fit;
-  double fb = ((const FitIdx*) b)->fit;
-  return (fa < fb) - (fa > fb);
-}
-
 // --- Presentation ---
 
 static void print_slime(const double* pos, int index, double fit, double DF) {
@@ -87,7 +63,7 @@ static void sma_run(RunResult* out) {
   // [ positions (pop_size*n) | weights (pop_size*n) | fits (pop_size) ]
   double* slab  = xmalloc((size_t) cfg.pop_size * (2 * g_cfg.n_dims + 1) * sizeof(double));
   double* Xb    = xmalloc((size_t) g_cfg.n_dims * sizeof(double));
-  FitIdx* order = xmalloc((size_t) cfg.pop_size * sizeof(FitIdx));
+  Ranked* order = xmalloc((size_t) cfg.pop_size * sizeof(Ranked));
 
   double* positions = slab;
   double* weights   = slab + cfg.pop_size * g_cfg.n_dims;
@@ -117,19 +93,15 @@ static void sma_run(RunResult* out) {
     print_separator();
   }
 
-  int (*cmp)(const void*, const void*) = g_cfg.direction == MINIMIZE ? cmp_min : cmp_max;
-
   StopState stop = stop_init();
   for (int it = 0; it < g_cfg.iterations; it++) {
     // --- Rank by fitness ---
-    for (int i = 0; i < cfg.pop_size; i++) {
-      order[i].fit = fits[i];
-      order[i].idx = i;
-    }
-    qsort(order, cfg.pop_size, sizeof(FitIdx), cmp);
+    // SMA needs the best and worst fitness this iteration, plus a top/bottom split for the weight
+    // formula
+    rank_by_fitness(fits, cfg.pop_size, order, RANK_BEST_FIRST);
 
-    double bF = order[0].fit;
-    double wF = order[cfg.pop_size - 1].fit;
+    double bF = order[0].fitness;
+    double wF = order[cfg.pop_size - 1].fitness;
     // Direction-aware eps to avoid div/0 when all fitnesses are equal, without
     // flipping the denominator's sign (negative for minimize, positive for maximize).
     double S = (bF - wF) + (g_cfg.direction == MINIMIZE ? -DBL_EPSILON : DBL_EPSILON);
@@ -140,7 +112,7 @@ static void sma_run(RunResult* out) {
     // population is attracted, not repelled
     int half = (cfg.pop_size + 1) / 2;
     for (int rank = 0; rank < cfg.pop_size; rank++) {
-      int    i      = order[rank].idx;
+      int    i      = order[rank].index;
       double logval = log10((bF - fits[i]) / S + 1.0);
       for (int d = 0; d < g_cfg.n_dims; d++) {
         double r                      = rng_next_double();

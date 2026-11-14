@@ -81,6 +81,18 @@ double evaluate(const double* pos);
 // Whether fitness `a` beats `b` in the run's direction
 int is_better(double a, double b);
 
+// Ranking a population by fitness without moving it: an array of (fitness, index) pairs is sorted
+// in its place, and the population is then read through the indices
+typedef struct {
+  double fitness;
+  int    index;
+} Ranked;
+
+typedef enum { RANK_BEST_FIRST, RANK_WORST_FIRST } RankOrder;
+
+// Fills order[0..n) from `fits` and sorts it; equal fitness goes by index, lowest first
+void rank_by_fitness(const double* fits, int n, Ranked* order, RankOrder direction);
+
 // --- Random numbers ---
 
 // Draws from the calling thread's random stream, which the runner seeds before each run
