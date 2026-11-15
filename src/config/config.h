@@ -15,6 +15,10 @@ void walk_section(const char* source, Section section, toml_datum_t tab, const A
 // Prints the rows of `table` whose scope is exactly `scope`
 void print_help_from_table(const FieldSpec* table, unsigned scope);
 
+// A row's type and default as --help shows them, e.g. "float" and "(unset)"
+const char* field_type_label(FieldType t);
+const char* field_default_display(const FieldSpec* f);
+
 // Prints `name = value` for the rows of `table` a run can set, read through `base`
 // [common]-only rows (seed, replicates) are batch-wide and skipped: dump_batch prints them
 void dump_fields(const FieldSpec* table, const void* base);

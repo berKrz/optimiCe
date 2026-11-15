@@ -1,0 +1,29 @@
+name: docs
+
+# Fails when a doc's generated blocks don't match the source tables: run `make docs` and commit
+# Runs on main too, since two PRs that each passed can still disagree once both are merged
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+
+      # The dev shell brings the compiler and tomlc17, the same toolchain as a local build
+      - name: Regenerate docs
+        run: nix develop --command make docs
+
+      - name: Check docs are up to date
+        run: |
+          git diff --exit-code || {
+            echo "::error::Generated docs are out of date: run 'make docs' and commit the result"
+            exit 1
+          }

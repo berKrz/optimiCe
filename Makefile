@@ -29,7 +29,18 @@ SRC      := $(sort $(wildcard $(SRCDIR)/*.c $(SRCDIR)/*/*.c))
 ALGO_SRC := $(sort $(wildcard $(SRCDIR)/algorithms/*.c))
 ALGOS    := $(notdir $(basename $(ALGO_SRC)))
 OBJ       = $(SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
-DEP       = $(OBJ:.o=.d)
+
+# Development tools, each one file in tools/ linked against every object but main.o: they reuse the
+# program's tables and printers without being part of it
+TOOLDIR   = tools
+TOOL_SRC := $(sort $(wildcard $(TOOLDIR)/*.c))
+TOOLS     = $(TOOL_SRC:$(TOOLDIR)/%.c=$(BUILDDIR)/$(TOOLDIR)/%)
+LIB_OBJ   = $(filter-out $(BUILDDIR)/main.o,$(OBJ))
+
+DEP       = $(OBJ:.o=.d) $(TOOLS:=.d)
+
+# Every doc gen-docs may have blocks in; it leaves a doc without blocks unchanged
+DOCS     := $(wildcard README.md CONTRIBUTING.md docs/*.md docs/algorithms/*.md)
 
 # Commit the binary was built from, for the results file's header: the short hash, plus "-dirty"
 # when the tree had uncommitted changes (a git tag instead, once one exists)
@@ -72,9 +83,21 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(@D)
 	$(CC) $(BUILD_FLAGS) $(CFLAGS) -c -o $@ $<
 
+$(BUILDDIR)/$(TOOLDIR)/%.o: $(TOOLDIR)/%.c
+	@mkdir -p $(@D)
+	$(CC) $(BUILD_FLAGS) $(CFLAGS) -c -o $@ $<
+
+$(BUILDDIR)/$(TOOLDIR)/%: $(BUILDDIR)/$(TOOLDIR)/%.o $(LIB_OBJ)
+	$(CC) $(BUILD_FLAGS) $(CFLAGS) -o $@ $^ $(LDLIBS)
+
+# Regenerates the blocks in every doc; run from the repository root, since links are worked out
+# from the docs' paths
+docs: $(BUILDDIR)/$(TOOLDIR)/gen-docs
+	$< $(DOCS)
+
 clean:
 	rm -rf $(BUILDDIR) $(TARGET)
 
 -include $(DEP)
 
-.PHONY: all clean FORCE
+.PHONY: all clean docs FORCE

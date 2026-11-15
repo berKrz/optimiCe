@@ -127,17 +127,28 @@ void fitness_check(void) {
                   fe->domain_hi);
 }
 
+const FitnessEntry* fitness_at(int i) {
+  int n = (int) (sizeof(fitness_table) / sizeof(fitness_table[0])) - 1;
+  return i >= 0 && i < n ? &fitness_table[i] : NULL;
+}
+
+void fitness_limits_text(const FitnessEntry* entry, char* dims, char* domain) {
+  snprintf(dims, FITNESS_LIMIT_LEN, "any");
+  snprintf(domain, FITNESS_LIMIT_LEN, "any");
+  if (entry->n_dims_min && entry->n_dims_min == entry->n_dims_max)
+    snprintf(dims, FITNESS_LIMIT_LEN, "%d", entry->n_dims_min);
+  else if (entry->n_dims_min && entry->n_dims_max)
+    snprintf(dims, FITNESS_LIMIT_LEN, "%d to %d", entry->n_dims_min, entry->n_dims_max);
+  else if (entry->n_dims_min) snprintf(dims, FITNESS_LIMIT_LEN, "%d or more", entry->n_dims_min);
+  else if (entry->n_dims_max) snprintf(dims, FITNESS_LIMIT_LEN, "%d or fewer", entry->n_dims_max);
+  if (isfinite(entry->domain_lo) || isfinite(entry->domain_hi))
+    snprintf(domain, FITNESS_LIMIT_LEN, "within [%g, %g]", entry->domain_lo, entry->domain_hi);
+}
+
 void fitness_print_catalog(void) {
   for (const FitnessEntry* fe = fitness_table; fe->name; fe++) {
-    char dims[32] = "any", domain[64] = "any";
-    if (fe->n_dims_min && fe->n_dims_min == fe->n_dims_max)
-      snprintf(dims, sizeof(dims), "%d", fe->n_dims_min);
-    else if (fe->n_dims_min && fe->n_dims_max)
-      snprintf(dims, sizeof(dims), "%d to %d", fe->n_dims_min, fe->n_dims_max);
-    else if (fe->n_dims_min) snprintf(dims, sizeof(dims), "%d or more", fe->n_dims_min);
-    else if (fe->n_dims_max) snprintf(dims, sizeof(dims), "%d or fewer", fe->n_dims_max);
-    if (isfinite(fe->domain_lo) || isfinite(fe->domain_hi))
-      snprintf(domain, sizeof(domain), "within [%g, %g]", fe->domain_lo, fe->domain_hi);
+    char dims[FITNESS_LIMIT_LEN], domain[FITNESS_LIMIT_LEN];
+    fitness_limits_text(fe, dims, domain);
     printf("  %-12s  n_dims: %-10s  domain: %s\n", fe->name, dims, domain);
   }
 }

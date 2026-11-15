@@ -240,7 +240,7 @@ void set_defaults(const FieldSpec* table, void* base) {
 
 // --- Help printer ---
 
-static const char* type_label(FieldType t) {
+const char* field_type_label(FieldType t) {
   switch (t) {
     case FIELD_INT:         return "int";
     case FIELD_UINT:        return "uint32";
@@ -254,7 +254,7 @@ static const char* type_label(FieldType t) {
   return "?";
 }
 
-static const char* get_default_display(const FieldSpec* f) {
+const char* field_default_display(const FieldSpec* f) {
   if (is_optional(f)) return "(unset)";
   if (f->default_display) return f->default_display;
   if (strcmp(f->name, "algorithm") == 0) return "(required)";
@@ -268,8 +268,8 @@ void print_help_from_table(const FieldSpec* table, unsigned scope) {
   for (int i = 0; table[i].name; i++) {
     const FieldSpec* row = &table[i];
     if (row->scope != scope) continue;
-    printf("  %-16s  %-7s  (default: %-14s)  %s", row->name, type_label(row->type),
-           get_default_display(row), row->description ? row->description : "");
+    printf("  %-16s  %-7s  (default: %-14s)  %s", row->name, field_type_label(row->type),
+           field_default_display(row), row->description ? row->description : "");
     if (row->type == FIELD_ENUM) {
       const EnumEntry* choices = row->lookup;
       for (int c = 0; choices[c].name; c++) printf("%s%s", c ? " | " : ": ", choices[c].name);
