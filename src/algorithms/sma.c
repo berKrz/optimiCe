@@ -197,6 +197,7 @@ static void show_population(const Population* pop) {
   for (int i = 0; i < cfg.pop_size; i++)
     print_slime(position_of(pop, i), i, pop->fits[i], pop->best_fitness);
   printf("best = %g\n", pop->best_fitness);
+  printf("(>> at the best fitness found so far)\n");
   wait_for_enter();
   print_separator();
 }

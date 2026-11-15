@@ -245,6 +245,7 @@ static void show_swarm(const Swarm* swarm) {
   for (int i = 0; i < cfg.swarm_size; i++)
     print_particle(&swarm->particles[i], i, swarm->gbest_fitness);
   printf("gbest = %g\n", swarm->gbest_fitness);
+  printf("(>> holds the gbest, (*) pbest improved this iteration)\n");
   wait_for_enter();
   print_separator();
 }

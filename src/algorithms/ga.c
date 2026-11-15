@@ -602,6 +602,7 @@ static void show_population(const Population* pop) {
     print_individual(pop, i, 5);
     printf("\n");
   }
+  printf("(>> best individual in the population)\n");
   wait_for_enter();
   print_separator();
 }
