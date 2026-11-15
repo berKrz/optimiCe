@@ -181,17 +181,13 @@ static void write_fields_block(FILE* out, const char* args) {
   write_fields(out, algorithms[i]->fields, 0);
 }
 
-// One line per algorithm, linking its doc by the doc's title; a bare name when it has no doc yet
+// One line per algorithm, linking its doc by the doc's title; check_coverage made sure both exist
 static void write_algorithms_block(FILE* out, const char* doc) {
   for (int i = 0; algorithms[i]; i++) {
     const char* name = algorithms[i]->name;
     char        path[PATH_MAX];
     snprintf(path, sizeof(path), "%s/%s.md", ALGORITHM_DOCS, name);
     char* title = doc_title(path);
-    if (!title) {
-      fprintf(out, "- `%s`\n", name);
-      continue;
-    }
     fprintf(out, "- [%s](", title);
     write_link(out, doc, path);
     fprintf(out, ") (`%s`)\n", name);
@@ -229,6 +225,43 @@ static void write_block(FILE* out, const char* doc, const char* spec) {
   if (*args) die("'%s' takes no arguments", name);
   if (strcmp(name, "algorithms") == 0) write_algorithms_block(out, doc);
   else write_fitness_block(out, doc);
+}
+
+// --- Coverage ---
+
+// Whether `text` has a line that is exactly `heading`, ignoring a trailing \r
+static int has_line(const char* text, const char* heading) {
+  size_t len = strlen(heading);
+  for (const char* line = text; line;) {
+    if (strncmp(line, heading, len) == 0 && strchr("\r\n", line[len])) return 1;
+    line = strchr(line, '\n');
+    if (line) line++;
+  }
+  return 0;
+}
+
+// Every registered algorithm needs a doc with a "# " title, and every catalog function a
+// "## <name>" section in the fitness doc, so adding either without documenting it fails here
+static void check_coverage(void) {
+  for (int i = 0; algorithms[i]; i++) {
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/%s.md", ALGORITHM_DOCS, algorithms[i]->name);
+    char* title = doc_title(path);
+    if (!title)
+      die("algorithm '%s' needs a doc with a '# ' title at %s", algorithms[i]->name, path);
+    free(title);
+  }
+
+  Text fitness = read_file(FITNESS_DOC);
+  if (!fitness.data) die("the fitness functions need their doc at %s", FITNESS_DOC);
+  for (int i = 0; fitness_at(i); i++) {
+    char heading[128];
+    snprintf(heading, sizeof(heading), "## %s", fitness_name(fitness_at(i)));
+    if (!has_line(fitness.data, heading))
+      die("fitness function '%s' needs a '%s' section in %s", fitness_name(fitness_at(i)), heading,
+          FITNESS_DOC);
+  }
+  free(fitness.data);
 }
 
 // --- Docs ---
@@ -297,9 +330,11 @@ static char* regenerate(const char* doc, const Text* src, size_t* out_len) {
   return buf;
 }
 
-// Every doc is regenerated before any is written, so an error in one leaves all of them untouched
+// Coverage is checked first, then every doc is regenerated before any is written, so an error
+// leaves all of them untouched
 int main(int argc, char** argv) {
   if (argc < 2) die("usage: gen-docs DOC...");
+  check_coverage();
 
   char**  outputs = xcalloc((size_t) argc, sizeof(char*));
   size_t* lens    = xcalloc((size_t) argc, sizeof(size_t));
