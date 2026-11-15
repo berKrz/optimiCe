@@ -20,9 +20,9 @@ static _Thread_local SmaConfig cfg;
 // --- Field table ---
 
 static const FieldSpec sma_fields[] = {
-    FIELD(SmaConfig, pop_size, INT, "30", "Population size"),
+    FIELD(SmaConfig, pop_size, INT, "30", "Population size (number of slimes)"),
     FIELD(SmaConfig, z, DOUBLE, "0.03",
-          "Full re-init probability (per slime), into the init range"),
+          "Per-slime probability of a full re-init into the init range"),
     ENUM_FIELD(SmaConfig, bounds, bounds_table, "clamp",
                "Out-of-domain handling (ignored when the domain has no finite end)"),
     FIELDS_END,
