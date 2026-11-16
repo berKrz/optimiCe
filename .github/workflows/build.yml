@@ -1,0 +1,24 @@
+name: build
+
+# Fails when the program doesn't build warning-free. -Werror is passed here rather than in the
+# Makefile, so a local build with a newer compiler that adds warnings still succeeds
+# It is what makes writing through a pointer to g_cfg or g_opts an error: assignments already are
+# Runs on main too, since two PRs that each passed can still disagree once both are merged
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+
+      # The dev shell brings the compiler and tomlc17, the same toolchain as a local build
+      - name: Build
+        run: nix develop --command make CFLAGS="-O2 -g -Wall -Wextra -Werror"
