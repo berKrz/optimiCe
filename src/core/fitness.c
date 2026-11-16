@@ -91,8 +91,9 @@ static double schaffer_f6(const double* pos) {
 // --- Catalog ---
 
 // The available fitness functions, by config name; NULL-terminated
-// A function must not return NaN for finite coordinates: nothing compares better or worse than
-// NaN, and the algorithms' best tracking relies on that. Overflowing to an infinity is fine
+// A function must not return NaN at a finite point of its domain: nothing compares better or
+// worse than NaN, and the algorithms' best tracking relies on that. Overflowing to an infinity is
+// fine. Outside the domain nothing is promised: points are brought back inside before evaluation
 static const FitnessEntry fitness_table[] = {
     {"sphere",      sphere,      0, 0, -INFINITY, INFINITY},
     {"rosenbrock",  rosenbrock,  2, 0, -INFINITY, INFINITY},
