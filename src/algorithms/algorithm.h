@@ -33,7 +33,9 @@ typedef struct {
   const Algorithm*    algorithm;
 } Config;
 
-extern _Thread_local Config g_cfg;
+// Read through g_cfg, which is const; only the runner writes, through g_cfg_rw
+extern _Thread_local Config g_cfg_rw;
+#define g_cfg (*(const Config*) &g_cfg_rw)
 
 // Process-wide options, not part of any config
 // Set before anything runs and read-only afterwards, so every thread can share them
@@ -42,7 +44,15 @@ typedef struct {
   int per_iteration;  // print a progress line per iteration; set by main, for single-job batches
 } Options;
 
-extern Options g_opts;
+// Read through g_opts, which is const; only parse_args and main write, through g_opts_rw
+extern Options g_opts_rw;
+#define g_opts (*(const Options*) &g_opts_rw)
+
+// The Makefile defines OPTIMICE_ALGORITHM_FILE for src/algorithms/*.c, where naming either
+// writable global is a compile error. The macros above still work as they were defined first
+#ifdef OPTIMICE_ALGORITHM_FILE
+#pragma GCC poison g_cfg_rw g_opts_rw
+#endif
 
 // --- Errors and memory ---
 

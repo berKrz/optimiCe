@@ -23,7 +23,7 @@ Each directory has a single header: `algorithms/algorithm.h`, `core/core.h`, `co
 
 An algorithm file includes only `algorithm.h`, and the build treats calling an undeclared function as an error (`-Werror=implicit-function-declaration`). So `algorithm.h` is exactly what an algorithm can use, and the compiler enforces it:
 
-- the run's configuration, `g_cfg`, read-only by convention;
+- the run's configuration, `g_cfg`, read-only outside the runner: assigning to it doesn't compile, and algorithm files can't name its writable version, `g_cfg_rw`;
 - `evaluate`, the only way to reach the fitness function;
 - `is_better`, the run's direction as a comparison;
 - the random number functions;
