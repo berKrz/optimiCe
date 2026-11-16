@@ -54,6 +54,18 @@ extern Options g_opts_rw;
 #pragma GCC poison g_cfg_rw g_opts_rw
 #endif
 
+// --- Unit tests ---
+
+// Marks a function private to its file that unit tests call directly: static in the program, not
+// static in the build the tests link against, which defines OPTIMICE_UNITTEST
+// A marked function has a one-line prototype right above its definition, using only public types:
+// the Makefile collects those prototypes into build/unittest.h for the tests
+#ifdef OPTIMICE_UNITTEST
+#define UNITTEST
+#else
+#define UNITTEST static
+#endif
+
 // --- Errors and memory ---
 
 // Makes the compiler check a printf-style format against its arguments

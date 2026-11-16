@@ -17,6 +17,7 @@
           bear
           pkg-config
           tomlc17
+          criterion
         ];
       };
 
