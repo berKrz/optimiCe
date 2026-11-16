@@ -41,7 +41,8 @@ static void make_parents(const char* path) {
 }
 
 // The config file's name without its directory and a trailing ".toml"
-static char* config_stem(const char* config_path) {
+UNITTEST char* config_stem(const char* config_path);
+UNITTEST char* config_stem(const char* config_path) {
   const char* base = strrchr(config_path, '/');
   base             = base ? base + 1 : config_path;
   size_t n         = strlen(base);
@@ -55,7 +56,8 @@ static char* config_stem(const char* config_path) {
 // Creates `<dir><stem>-<YYYYMMDD-HHMMSS>.csv` exclusively ("wx"), so it never replaces anything:
 // if the name exists (same config, same second), tries -2, -3, ... up to -99
 // `dir` is "" for the current directory, or ends in '/'
-static FILE* open_generated(const char* dir, const char* config_path, const struct tm* now) {
+UNITTEST FILE* open_generated(const char* dir, const char* config_path, const struct tm* now);
+UNITTEST FILE* open_generated(const char* dir, const char* config_path, const struct tm* now) {
   char* stem = config_stem(config_path);
   char  stamp[32];
   strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", now);
