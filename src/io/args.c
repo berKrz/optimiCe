@@ -7,7 +7,7 @@
 #include "core/core.h"
 #include "io/io.h"
 
-Options g_opts;
+Options g_opts_rw;
 
 // One group per distinct scope, in order of first appearance in runner_fields
 static void print_runner_fields(void) {
@@ -104,7 +104,7 @@ Args parse_args(int argc, char** argv) {
       case 'f':
       case 'F': args.config_path = optarg; break;
       case 'i':
-      case 'I': g_opts.interactive = 1; break;
+      case 'I': g_opts_rw.interactive = 1; break;
       case 'l':
       case 'L': print_list(); exit(EXIT_SUCCESS);
       case 'd':

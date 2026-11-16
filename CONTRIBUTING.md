@@ -32,7 +32,7 @@ Every pull request runs a check that regenerates the docs and fails if they diff
 - **Formatting** follows `.clang-format`.
 - **Comments** all follow one pattern: clear, concise and straight to the point. There are no file-level comments, and no paper references in the source: references belong in the docs.
 - **Names** are descriptive, not the symbols of the paper an algorithm comes from: `approach_prob`, not `p`. The docs map the paper's symbols to the code's names where it helps.
-- **Configuration** is read from the global `g_cfg` rather than passed around, which keeps signatures short. An algorithm's own parameters live in a config struct private to its file.
+- **Configuration** is read from the global `g_cfg` rather than passed around, which keeps signatures short. It is const, so an algorithm can read it but not change it. An algorithm's own parameters live in a config struct private to its file.
 - **Validation happens once, up front.** Everything that can be checked is checked while loading; code that runs after validation doesn't re-check what validation guarantees.
 - **Nothing is listed by hand that a table already knows.** Help, `--list`, `--dump-config` and the docs' tables are all generated from the field tables, the fitness catalog and the algorithm registry.
 

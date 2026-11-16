@@ -191,7 +191,7 @@ void walk_section(const char* source, Section section, toml_datum_t tab, const A
     const char*      key  = tab.u.tab.key[i];
     const FieldSpec* row  = find_row(runner_fields, key);
     const FieldSpec* arow = algo ? find_row(algo->fields, key) : NULL;
-    void*            base = &g_cfg;
+    void*            base = &g_cfg_rw;
 
     if (row && arow)
       die_at(source, key, "internal: key defined by both the runner and the algorithm");

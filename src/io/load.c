@@ -55,8 +55,8 @@ Batch load_batch(const char* filename) {
   char common_src[256];
   snprintf(common_src, sizeof(common_src), "%s [common]", filename);
 
-  g_cfg = (Config) {0};
-  set_defaults(runner_fields, &g_cfg);
+  g_cfg_rw = (Config) {0};
+  set_defaults(runner_fields, &g_cfg_rw);
   if (common.type == TOML_TABLE) walk_section(common_src, SECTION_COMMON, common, NULL);
   Config common_base = g_cfg;
 
@@ -131,8 +131,8 @@ Batch load_batch(const char* filename) {
     const Algorithm* algo = algorithms[run_algo[k]];
     snprintf(src, sizeof(src), "%s [[run]] %s", filename, rc->label);
 
-    g_cfg           = common_base;
-    g_cfg.algorithm = algo;
+    g_cfg_rw           = common_base;
+    g_cfg_rw.algorithm = algo;
     memcpy(algo->cfg_base(), algo_base[run_algo[k]], algo->cfg_size);
 
     // The walker also rejects unknown keys and keys in the wrong section

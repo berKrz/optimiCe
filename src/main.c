@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
     die_with_hint("--interactive needs a single job (got %d run%s x %d replicate%s = %d)",
                   batch.n_runs, batch.n_runs == 1 ? "" : "s", batch.replicates,
                   batch.replicates == 1 ? "" : "s", jobs);
-  g_opts.per_iteration = jobs == 1;
+  g_opts_rw.per_iteration = jobs == 1;
 
   if (args.dump_config) {
     dump_batch(&batch);

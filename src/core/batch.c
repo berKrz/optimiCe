@@ -14,7 +14,7 @@ int batch_jobs(const Batch* batch) { return batch->n_runs * batch->replicates; }
 // Copies a run's two configs into this thread's g_cfg and algorithm cfg
 static void load_run(const RunConfig* rc) {
   const Algorithm* algo = rc->cfg.algorithm;
-  g_cfg                 = rc->cfg;
+  g_cfg_rw              = rc->cfg;
   memcpy(algo->cfg_base(), rc->algo_cfg, algo->cfg_size);
 }
 
@@ -28,8 +28,8 @@ static void run_job(const Batch* batch, int j, RunResult* out) {
   snprintf(where, sizeof(where), "%s, replicate %d", rc->label, r);
 
   load_run(rc);
-  g_cfg.seed = job_seed(batch, r);
-  g_where    = where;
+  g_cfg_rw.seed = job_seed(batch, r);
+  g_where       = where;
   rng_init(g_cfg.seed);
   evaluations_reset();
   rc->cfg.algorithm->run(out);

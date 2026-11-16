@@ -5,7 +5,7 @@
 #include "config/config.h"
 #include "core/core.h"
 
-_Thread_local Config g_cfg;
+_Thread_local Config g_cfg_rw;
 
 // --- Enum lookup tables ---
 
@@ -66,11 +66,11 @@ void validate(void) {
   // sample from, so it has to be finite, and so does its width
   if (isnan(g_cfg.init_min)) {
     if (isinf(g_cfg.domain_min)) die_with_hint("domain_min is infinite, so init_min must be set");
-    g_cfg.init_min = g_cfg.domain_min;
+    g_cfg_rw.init_min = g_cfg.domain_min;
   }
   if (isnan(g_cfg.init_max)) {
     if (isinf(g_cfg.domain_max)) die_with_hint("domain_max is infinite, so init_max must be set");
-    g_cfg.init_max = g_cfg.domain_max;
+    g_cfg_rw.init_max = g_cfg.domain_max;
   }
   if (!isfinite(g_cfg.init_min) || !isfinite(g_cfg.init_max))
     die_with_hint("init_min and init_max must be finite");

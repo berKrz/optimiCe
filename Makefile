@@ -30,6 +30,9 @@ ALGO_SRC := $(sort $(wildcard $(SRCDIR)/algorithms/*.c))
 ALGOS    := $(notdir $(basename $(ALGO_SRC)))
 OBJ       = $(SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 
+# Algorithms only read g_cfg and g_opts: this makes naming their writable versions an error there
+$(ALGO_SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o): BUILD_FLAGS += -DOPTIMICE_ALGORITHM_FILE
+
 # Development tools, each one file in tools/ linked against every object but main.o: they reuse the
 # program's tables and printers without being part of it
 TOOLDIR   = tools
