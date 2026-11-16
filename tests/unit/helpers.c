@@ -28,3 +28,21 @@ void* algo_field_in(const Algorithm* algo, void* base, const char* key) {
 void* algo_field(const RunConfig* rc, const char* key) {
   return algo_field_in(rc->cfg.algorithm, rc->algo_cfg, key);
 }
+
+const Algorithm* algo_named(const char* name) {
+  int a = find_algorithm(name);
+  cr_assert(a >= 0, "no algorithm '%s'", name);
+  return algorithms[a];
+}
+
+void* live_field(const char* name, const char* key) {
+  const Algorithm* algo = algo_named(name);
+  return algo_field_in(algo, algo->cfg_base(), key);
+}
+
+RunResult run_job_of(const Batch* batch, int j) {
+  RunResult res = {0};
+  res.pos       = calloc((size_t) batch->runs[j / batch->replicates].cfg.n_dims, sizeof(double));
+  run_job(batch, j, &res);
+  return res;
+}
