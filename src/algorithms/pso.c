@@ -131,7 +131,8 @@ static void update_gbest(Swarm* swarm, const Particle* p) {
 
 // v_max is a fraction of the domain's width; an unbounded domain has none, so the init range's
 // stands in as the scale of the search
-static double velocity_cap(void) {
+UNITTEST double velocity_cap(void);
+UNITTEST double velocity_cap(void) {
   int    bounded = isfinite(g_cfg.domain_min) && isfinite(g_cfg.domain_max);
   double width   = bounded ? g_cfg.domain_max - g_cfg.domain_min : g_cfg.init_max - g_cfg.init_min;
   return cfg.v_max * width;
@@ -174,7 +175,8 @@ static void init_swarm(Swarm* swarm) {
 // Inertia for iteration `iter` (0-based): linear from w at the first iteration to w_end at the
 // last
 // With w_end == w the difference is exactly 0, so constant inertia stays bit-identical to w
-static double inertia(int iter) {
+UNITTEST double inertia(int iter);
+UNITTEST double inertia(int iter) {
   double frac = g_cfg.iterations > 1 ? (double) iter / (g_cfg.iterations - 1) : 0.0;
   return cfg.w + (cfg.w_end - cfg.w) * frac;
 }

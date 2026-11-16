@@ -20,7 +20,8 @@ static void load_run(const RunConfig* rc) {
 
 static uint32_t job_seed(const Batch* batch, int r) { return batch->seed + (uint32_t) r; }
 
-static void run_job(const Batch* batch, int j, RunResult* out) {
+UNITTEST void run_job(const Batch* batch, int j, RunResult* out);
+UNITTEST void run_job(const Batch* batch, int j, RunResult* out) {
   const RunConfig* rc = &batch->runs[j / batch->replicates];
   int              r  = j % batch->replicates;
 
