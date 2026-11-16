@@ -2,13 +2,6 @@
 # shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
-one_run() {
-  config <<'TOML'
-[[run]]
-algorithm = "pso"
-TOML
-}
-
 # --- Errors ---
 
 begin "unknown long option"
@@ -32,7 +25,7 @@ run --config
 expect_error "Error: missing argument for option: --config"
 
 begin "stray argument"
-one_run
+one_run pso
 run -f case.toml extra
 expect_error "Error: unexpected argument"
 
@@ -43,7 +36,7 @@ expect_error "Error: --config / -f is required"
 # --- Short options in either case ---
 
 begin "-F works like -f"
-one_run
+one_run pso
 run -F case.toml -D
 expect_ok
 
@@ -71,7 +64,7 @@ expect_error "Error: --interactive needs a single job (got 1 run x 2 replicates 
 
 # Checked before --dump-config, which then runs nothing
 begin "--interactive with one job"
-one_run
+one_run pso
 run -i -d -f case.toml
 expect_ok
 

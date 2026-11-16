@@ -24,6 +24,13 @@ begin() {
 # Writes stdin as the case's config, case.toml
 config() { cat > case.toml; }
 
+# Writes a config with one run of algorithm $1, plus the lines in $2 (several lines in one
+# argument) in that run; every other field keeps its default
+one_run() { printf '[[run]]\nalgorithm = "%s"\n%s\n' "$1" "$2" | config; }
+
+# Loads and validates the config, without running it
+check() { run -d -f case.toml; }
+
 # Runs optimice with the given arguments; keeps stdout in $out, stderr in $err, the status in
 # $status. stdin is empty, so nothing ever waits for a key press
 run() {
