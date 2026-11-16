@@ -148,11 +148,22 @@ docs: $(BUILDDIR)/$(TOOLDIR)/gen-docs
 # Runs every test
 test: test-unit test-cli
 
-test-unit: $(UNIT_BIN)
-	$<
+# Every algorithm brings its own tests, unit and shell, named after its source file: both test
+# targets check this first, before building anything, so a missing file is reported as such
+ALGO_NAMES = $(notdir $(basename $(ALGO_SRC)))
+
+check-tests:
+	@status=0; for name in $(ALGO_NAMES); do \
+	  for f in $(TESTDIR)/unit/test-$$name.c $(TESTDIR)/cli/test-$$name.sh; do \
+	    [ -f "$$f" ] || { echo "Error: algorithm '$$name' needs its tests at $$f" >&2; status=1; }; \
+	  done; \
+	done; exit $$status
+
+test-unit: check-tests $(UNIT_BIN)
+	$(UNIT_BIN)
 
 # Every tests/cli/test-*.sh, each running the program as a user would; all run even after a failure
-test-cli: $(TARGET)
+test-cli: check-tests $(TARGET)
 	@status=0; for t in $(CLI_TESTS); do \
 	  echo "# $$t"; OPTIMICE=$(CURDIR)/$(TARGET) sh $$t || status=1; \
 	done; exit $$status
@@ -162,4 +173,4 @@ clean:
 
 -include $(DEP)
 
-.PHONY: all clean docs test test-unit test-cli FORCE
+.PHONY: all clean docs test test-unit test-cli check-tests FORCE
