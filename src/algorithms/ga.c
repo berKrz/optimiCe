@@ -55,16 +55,17 @@ static const EnumEntry crossover_table[] = {
 };
 
 static const FieldSpec ga_fields[] = {
-    FIELD(GaConfig, pop_size, INT, "15", "Population size (>= 2)"),
-    FIELD(GaConfig, ind_size, INT, "22", "Bits per dimension [2, 63]"),
-    FIELD(GaConfig, tournament_size, INT, "2", "Individuals per tournament"),
-    FIELD(GaConfig, rank_pressure, DOUBLE, "1.5", "Rank selection pressure in [1.0, 2.0]"),
+    FIELD(GaConfig, pop_size, INT, "15", "Population size (at least 2)"),
+    FIELD(GaConfig, ind_size, INT, "22", "Bits per dimension, in [2, 63]"),
+    FIELD(GaConfig, tournament_size, INT, "2", "Individuals per tournament (tournament selection)"),
+    FIELD(GaConfig, rank_pressure, DOUBLE, "1.5",
+          "Expected copies of the best under rank selection, in [1.0, 2.0]"),
     FIELD(GaConfig, cut_points, DOUBLE_LIST, "[0.6]",
-          "n_point cut ratios in (0.0, 1.0), increasing"),
-    FIELD(GaConfig, mutation_rate, DOUBLE, "0.01", "Per-bit flip rate in [0.0, 1.0)"),
-    ENUM_FIELD(GaConfig, selection, selection_table, "roulette", "Selection"),
-    ENUM_FIELD(GaConfig, crossover, crossover_table, "n_point", "Crossover"),
-    ENUM_FIELD(GaConfig, elitism, elitism_table, "none", "Elitism"),
+          "Cut ratios for n_point crossover, in (0.0, 1.0), increasing"),
+    FIELD(GaConfig, mutation_rate, DOUBLE, "0.01", "Per-bit flip probability, in [0.0, 1.0)"),
+    ENUM_FIELD(GaConfig, selection, selection_table, "roulette", "Parent selection operator"),
+    ENUM_FIELD(GaConfig, crossover, crossover_table, "n_point", "Crossover operator"),
+    ENUM_FIELD(GaConfig, elitism, elitism_table, "none", "Elitism scheme"),
     FIELDS_END,
 };
 
@@ -601,6 +602,7 @@ static void show_population(const Population* pop) {
     print_individual(pop, i, 5);
     printf("\n");
   }
+  printf("(>> best individual in the population)\n");
   wait_for_enter();
   print_separator();
 }
@@ -634,8 +636,8 @@ static void ga_run(RunResult* out) {
   }
 
   StopState stop = stop_init();
-  for (int gen = 0; gen < g_cfg.iterations; gen++) {
-    if (g_opts.interactive) print_iteration_header(gen);
+  for (int i = 0; i < g_cfg.iterations; i++) {
+    if (g_opts.interactive) print_iteration_header(i);
     select_parents(&pop);
     if (g_opts.interactive) show_pairs(&pop);
 

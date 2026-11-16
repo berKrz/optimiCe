@@ -20,9 +20,9 @@ static _Thread_local SmaConfig cfg;
 // --- Field table ---
 
 static const FieldSpec sma_fields[] = {
-    FIELD(SmaConfig, pop_size, INT, "30", "Population size"),
+    FIELD(SmaConfig, pop_size, INT, "30", "Population size (number of slimes)"),
     FIELD(SmaConfig, z, DOUBLE, "0.03",
-          "Full re-init probability (per slime), into the init range"),
+          "Per-slime probability of a full re-init into the init range"),
     ENUM_FIELD(SmaConfig, bounds, bounds_table, "clamp",
                "Out-of-domain handling (ignored when the domain has no finite end)"),
     FIELDS_END,
@@ -197,6 +197,7 @@ static void show_population(const Population* pop) {
   for (int i = 0; i < cfg.pop_size; i++)
     print_slime(position_of(pop, i), i, pop->fits[i], pop->best_fitness);
   printf("best = %g\n", pop->best_fitness);
+  printf("(>> at the best fitness found so far)\n");
   wait_for_enter();
   print_separator();
 }
