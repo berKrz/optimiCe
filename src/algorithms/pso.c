@@ -45,7 +45,7 @@ static const FieldSpec pso_fields[] = {
     FIELD(PsoConfig, w, DOUBLE, "1.0",
           "Inertia weight (at the first iteration, when w_end is set)"),
     FIELD(PsoConfig, w_end, DOUBLE, "nan",
-          "Inertia at the last iteration, decaying linearly from w (unset = constant)"),
+          "Inertia at the last iteration, changing linearly from w (unset = constant)"),
     FIELD(PsoConfig, v_max, DOUBLE, "0.0",
           "Velocity cap as a fraction of the domain width (0 = off)"),
     FIELD(PsoConfig, c1, DOUBLE, "2.0",
