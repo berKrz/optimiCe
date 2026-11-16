@@ -53,6 +53,9 @@ UNIT_OBJ     = $(UNIT_SRC:%.c=$(BUILDDIR)/%.o)
 UNIT_BIN     = $(BUILDDIR)/$(TESTDIR)/unit-tests
 UNITTEST_OBJ = $(LIB_OBJ:$(BUILDDIR)/%=$(UNITTEST_DIR)/%)
 
+# End-to-end tests: shell scripts run against the built program
+CLI_TESTS := $(sort $(wildcard $(TESTDIR)/cli/test-*.sh))
+
 CRITERION_CFLAGS := $(shell $(PKG_CONFIG) --cflags criterion 2>/dev/null)
 CRITERION_LIBS   := $(shell $(PKG_CONFIG) --libs   criterion 2>/dev/null || echo -lcriterion)
 
@@ -143,14 +146,20 @@ docs: $(BUILDDIR)/$(TOOLDIR)/gen-docs
 	$< $(DOCS)
 
 # Runs every test
-test: test-unit
+test: test-unit test-cli
 
 test-unit: $(UNIT_BIN)
 	$<
+
+# Every tests/cli/test-*.sh, each running the program as a user would; all run even after a failure
+test-cli: $(TARGET)
+	@status=0; for t in $(CLI_TESTS); do \
+	  echo "# $$t"; OPTIMICE=$(CURDIR)/$(TARGET) sh $$t || status=1; \
+	done; exit $$status
 
 clean:
 	rm -rf $(BUILDDIR) $(TARGET)
 
 -include $(DEP)
 
-.PHONY: all clean docs test test-unit FORCE
+.PHONY: all clean docs test test-unit test-cli FORCE
