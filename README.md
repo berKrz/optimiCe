@@ -36,7 +36,7 @@ optimiCe depends on [tomlc17](https://github.com/cktan/tomlc17) for TOML parsing
 make
 ```
 
-produces the `optimice` binary in the repository's root. The Makefile finds tomlc17 through `pkg-config`, and falls back to a plain `-ltomlc17` when `pkg-config` can't find it.
+produces the `optimice` binary in the repository's root. The Makefile finds tomlc17 through `pkg-config`, and falls back to a plain `-ltomlc17` when `pkg-config` can't find it. `make test` runs the test suite, which also needs [Criterion](https://github.com/Snaipe/Criterion); see [Tests](CONTRIBUTING.md#tests).
 
 **With Nix**, the flake provides tomlc17 and the whole toolchain: `nix develop` enters a shell to run `make` from, and
 
