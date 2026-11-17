@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in optimiCe. This guide covers setting up a development environment, the conventions the code follows, and the two most common contributions: adding an algorithm and adding a fitness function. For how the code is put together, read [Architecture](docs/architecture.md) first.
+Thanks for your interest in optimiCe. This guide covers setting up a development environment, the conventions the code follows, the tests, and the two most common contributions: adding an algorithm and adding a fitness function. For how the code is put together, read [Architecture](docs/architecture.md) first.
 
 ## Setup
 
@@ -10,22 +10,30 @@ The repository includes a Nix flake with everything needed to build and work on 
 nix develop
 ```
 
-enters a shell with `gcc`, `pkg-config`, tomlc17, `clang-tools` (clang-format and clangd), `gdb` and `bear`. With [direnv](https://direnv.net) installed, the shell activates automatically on `cd` into the repository: copy `.envrc.example` to `.envrc` and run `direnv allow`.
+enters a shell with `gcc`, `pkg-config`, tomlc17, Criterion, `clang-tools` (clang-format and clangd), `gdb` and `bear`. With [direnv](https://direnv.net) installed, the shell activates automatically on `cd` into the repository: copy `.envrc.example` to `.envrc` and run `direnv allow`.
 
-Without Nix, install tomlc17 as described in the [README](README.md), plus `clang-format` for formatting.
+Without Nix, install tomlc17 as described in the [README](README.md), plus [Criterion](https://github.com/Snaipe/Criterion) for the unit tests and `clang-format` for formatting.
 
-For editor support through clangd, `bear -- make` records the compile commands in `compile_commands.json`; run `make clean` first, so every file is compiled and recorded.
+For editor support through clangd, bear records the compile commands in `compile_commands.json`. It only records what actually compiles, so record a full build once, tests included, then append to it as you work:
+
+```bash
+make clean && bear -- make all test    # once: every file compiled and recorded
+bear --append -- make test             # afterwards: adds whatever was rebuilt
+```
+
+A file missing from `compile_commands.json` gets the flags of the most similar file that's in it: a test file then borrows a source file's flags, and clangd reports errors that aren't there.
 
 ## Workflow
 
 - Branch from `main`, and open a pull request against it. Changes reach `main` only through pull requests.
-- Keep each commit to one change, with a message in the [Conventional Commits](https://www.conventionalcommits.org) style: `feat:`, `fix:`, `refactor:`, `docs:`, `build:`, `ci:`, followed by a short summary.
+- Keep each commit to one change, with a message in the [Conventional Commits](https://www.conventionalcommits.org) style: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `build:`, `ci:`, followed by a short summary.
 - Before opening a pull request, check that:
   - `make` builds without warnings;
+  - `make test` passes;
   - the files you changed are formatted with `clang-format -i`;
   - `make docs` leaves the docs unchanged, or you've committed what it changed.
 
-Every pull request runs a check that regenerates the docs and fails if they differ from what's committed. When it fails, its log shows the exact difference: run `make docs` and commit the result.
+Every pull request runs three checks: the build, with warnings as errors; `make test`; and the docs, which are regenerated and must match what's committed. When the docs check fails, its log shows the exact difference: run `make docs` and commit the result.
 
 ## Conventions
 
@@ -36,9 +44,44 @@ Every pull request runs a check that regenerates the docs and fails if they diff
 - **Validation happens once, up front.** Everything that can be checked is checked while loading; code that runs after validation doesn't re-check what validation guarantees.
 - **Nothing is listed by hand that a table already knows.** Help, `--list`, `--dump-config` and the docs' tables are all generated from the field tables, the fitness catalog and the algorithm registry.
 
+## Tests
+
+There are two layers of tests, and `make test` runs both:
+
+- **Unit tests**, in `tests/unit/`: C, written with [Criterion](https://github.com/Snaipe/Criterion), calling the program's functions directly. `make test-unit` runs them alone.
+- **Shell tests**, in `tests/cli/`: scripts that run the built `optimice` the way a user would. `make test-cli` runs them alone.
+
+A test goes in the shell layer when what it checks ends the program, an error message and its exit status, or is output: the terminal's lines, `--list`, `--dump-config`, the results file. Everything else goes in the unit layer. [Architecture](docs/architecture.md#tests) explains how both are built.
+
+### Unit tests
+
+Each file covers one area, `tests/unit/test-<area>.c`, and includes only `unittest.h`, or `helpers.h` for the shared helpers: loading a config from a string, running a job as the runner does, reading an algorithm's fields through its table. Criterion runs every test in its own process, so a test can set `g_cfg_rw` and the algorithms' configs freely: nothing carries over to the next test.
+
+To test a function that's private to its file, replace its `static` with `UNITTEST`, and give it a one-line prototype before its definition:
+
+```c
+UNITTEST double level_value(uint64_t level);
+UNITTEST double level_value(uint64_t level) {
+```
+
+`UNITTEST` is `static` in the program and nothing in the build the tests link against. The Makefile collects the prototypes into `build/unittest.h`, so the prototype must fit on one line, and its signature may only use public types: a test can't call a function that takes a struct private to its file.
+
+### Shell tests
+
+Each file covers one area, `tests/cli/test-<area>.sh`, and sources `lib.sh`. A case starts with `begin`, writes its config with `config` or `one_run`, runs `optimice` with `run`, and ends with one check:
+
+```sh
+begin "n_dims below 1"
+one_run pso 'n_dims = 0'
+check
+expect_error "Error at 'case.toml [[run]] pso-1': n_dims must be at least 1"
+```
+
+Every case runs in a fresh temporary directory, on a config written there as `case.toml`. Error messages are matched exactly; only the part another program writes, such as tomlc17's or the system's text, is left out. A rejected value sits next to the accepted value just inside, read back with `expect_dump`. Results are checked by their structure, never by their numbers, which would change with any change to an algorithm.
+
 ## Adding an algorithm
 
-An algorithm is a single file, `src/algorithms/<name>.c`, plus its doc. Nothing else needs to change: the Makefile finds the file and registers the algorithm.
+An algorithm is a single file, `src/algorithms/<name>.c`, plus its doc and its tests. Nothing else needs to change: the Makefile finds the file and registers the algorithm.
 
 ### The code
 
@@ -76,11 +119,21 @@ For the Fields section, write an empty block and let `make docs` fill it:
 <!-- /gen -->
 ```
 
+### The tests
+
+Every algorithm needs `tests/unit/test-<name>.c` and `tests/cli/test-<name>.sh`, and `make test` fails until both exist.
+
+What every algorithm is checked for already runs without them: `tests/unit/test-algorithms.c` reads the registry and the field tables, and runs each algorithm under every combination of its enum fields for determinism and a sound result, on several threads at once, and with each early stop. The algorithm's own files cover what's specific to it:
+
+- **Unit:** its evaluation count, the exact formula for a run of a given length; and its own functions, marked `UNITTEST`, where they have edge cases worth pinning down.
+- **Shell:** every check its `validate` makes, each rejected value next to the accepted value just inside.
+
 ## Adding a fitness function
 
-1. **Write the function** in `src/core/fitness.c`, as a `static` function taking the position and reading the number of dimensions from `g_cfg.n_dims`. It must not return NaN for finite coordinates, since nothing compares better or worse than NaN; overflowing to an infinity is fine.
+1. **Write the function** in `src/core/fitness.c`, as a `static` function taking the position and reading the number of dimensions from `g_cfg.n_dims`. It must not return NaN at a finite point of its domain, since nothing compares better or worse than NaN; overflowing to an infinity is fine.
 2. **Add its row to the catalog** in the same file: its config name, the function, its limits on `n_dims` (`0` for no limit), and the domain it's defined over (`-INFINITY` and `INFINITY` for none).
 3. **Document it** with a `## <name>` section in [`docs/fitness.md`](docs/fitness.md): a sentence or two on its character, then its formula as the code computes it. `make docs` fails until the section exists, and adds the function to the catalog table.
+4. **Test it** in `tests/unit/test-fitness.c`: its value at its known optimum, if it has one, and at a point or two worked out by hand. The check that no function returns NaN in its domain already covers it, through the catalog.
 
 ## Generated docs
 

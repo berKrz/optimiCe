@@ -14,6 +14,9 @@ src/
   io/            command line, config loading, terminal output, results file
 tools/
   gen-docs.c     regenerates the docs' tables from the source tables
+tests/
+  unit/          C unit tests, written with Criterion
+  cli/           shell tests, running the built binary
 build/           everything the build produces: objects, dependency files, generated headers
 ```
 
@@ -130,6 +133,31 @@ Everything that can be checked is checked while loading, so failures during a ba
 
 `io/report.c` prints to the terminal; `io/output.c` writes the results file. The file's header records the commit the binary was built from, which the Makefile writes into `build/version.h` from `git describe`, and the config file's POSIX `cksum`, so a results file can be traced back to the code and configuration that produced it. Rows are written by the printer, in job order, and flushed one by one. Final values are printed in the shortest form that reads back exactly, so printed results identify the doubles the run produced.
 
+## Tests
+
+The tests come in two layers, split by what they check:
+
+- **Unit tests**, in `tests/unit/`, call the program's functions directly: the core pieces, config loading, the output's number formatting, and the algorithms, down to functions private to their files.
+- **Shell tests**, in `tests/cli/`, run the built binary: everything that ends the program with an error, and everything visible in its output.
+
+An error ends the process through `exit`, so it can't be checked from inside a C test without ending the test with it. The shell layer checks it from outside, where the message and the exit status are what a user sees.
+
+### Unit tests
+
+The tests link against a second build of the program, under `build/unittest/`, compiled with `OPTIMICE_UNITTEST` defined. `UNITTEST`, defined in `algorithm.h`, marks a function private to its file that a test calls directly: it's `static` in the program and nothing in the second build, so the program itself is unchanged by what its tests reach. Each marked function has a one-line prototype before its definition, and the Makefile collects them into `build/unittest.h`, the one header a test includes. Since the prototypes come from the source itself, a test's declaration can't drift from the definition. The header also includes every public header, marked as re-exported, so clangd counts them as provided by it.
+
+Every file in `tests/unit/` is linked into one binary, with every object of the second build but `main.o`. Criterion provides `main`, registers each test where it's declared, and runs every test in its own process: a test can set `g_cfg_rw` or an algorithm's config freely, since nothing carries over to the next.
+
+The algorithms' common checks are written against the registry and the field tables rather than any algorithm: every algorithm runs under every combination of its enum fields, on several threads at once, and with each early stop. A new algorithm, or a new enum value, is covered without a new test. Each algorithm's own file adds what's specific to it, such as its exact evaluation count.
+
+### Shell tests
+
+Every `tests/cli/test-*.sh` sources `tests/cli/lib.sh`, which runs each case in a fresh temporary directory, on a config written there as `case.toml`, so messages name the same file every time. A case's checks compare exit status, stdout and stderr, and print `ok N - name` or `not ok N - name` with the difference, in the TAP format. Error messages are matched exactly, apart from text written by another program, such as tomlc17's parse errors; results are checked by structure, since their numbers change with the algorithms.
+
+### Guards
+
+`make test` first checks that every algorithm in `src/algorithms/` has its own `tests/unit/test-<name>.c` and `tests/cli/test-<name>.sh`, and stops before building anything when one is missing. A GitHub Actions workflow runs `make test`, with warnings as errors, on every pull request and every push to `main`.
+
 ## Build
 
 The build is a single Makefile, written so that adding a source file, an algorithm or a tool never means editing it. Installing the dependencies and running `make` is covered in the [README](../README.md); this section is about how the build works.
@@ -138,11 +166,12 @@ The build is a single Makefile, written so that adding a source file, an algorit
 
 - `make` (`all`): builds the `optimice` binary at the top of the repository.
 - `make docs`: builds the docs generator and runs it over every doc. It doesn't build `optimice`.
+- `make test`: checks every algorithm has its tests, then runs both layers. `make test-unit` and `make test-cli` run one each; the shell tests build `optimice` first.
 - `make clean`: removes `build/` and the binary.
 
 ### Sources
 
-Every `.c` file in `src/` and in its directories, one level down, is compiled; a new source file needs no entry. Objects go under `build/`, mirroring `src/`: `src/core/rng.c` becomes `build/core/rng.o`. Everything the build produces lives there, so `make clean` is a single `rm -rf`, and the source tree never holds build output.
+Every `.c` file in `src/` and in its directories, one level down, is compiled; a new source file needs no entry. Objects go under `build/`, mirroring `src/`: `src/core/rng.c` becomes `build/core/rng.o`. The tests' build of the same sources goes under `build/unittest/`, and the test files' objects under `build/tests/`. Everything the build produces lives there, so `make clean` is a single `rm -rf`, and the source tree never holds build output.
 
 ### Flags
 
@@ -163,16 +192,17 @@ Flags come in two groups:
 
 `-MMD` makes the compiler write, next to each object, a `.d` file listing every header the object included, and the Makefile includes those files. Changing a header rebuilds exactly the objects that use it. `-MP` adds an empty rule for each header, so deleting or renaming a header doesn't leave make asking for a file that no longer exists.
 
-On a first build there are no `.d` files yet, so make can't know that some objects need a generated header before they compile. Two rules say so explicitly: `output.o` needs `version.h`, and `registry.o` needs `registry.h`.
+On a first build there are no `.d` files yet, so make can't know that some objects need a generated header before they compile. A few rules say so explicitly: `output.o` needs `version.h`, `registry.o` needs `registry.h`, in both builds, and every test object needs `unittest.h`.
 
 ### Generated headers
 
-Two headers are written by the Makefile into `build/`:
+Three headers are written by the Makefile into `build/`:
 
 - `version.h` defines the build's version for the results file's header: `git describe --always --dirty`, so the short commit hash, with `-dirty` when the tree has uncommitted changes, or a tag once one exists. Without git it's `unknown`. `VERSION` can be set on the command line instead, which the Nix build does.
 - `registry.h` declares every algorithm and defines `algorithms[]`. The Makefile lists the files in `src/algorithms/`, sorts their names, and for each `<name>.c` declares `<name>_algorithm`. An algorithm file that doesn't define its value fails at link time.
+- `unittest.h`, for the unit tests only: every `UNITTEST` prototype in `src/`, after the headers they need (see [Tests](#unit-tests)).
 
-Both are regenerated on every `make`, since they depend on things make can't see as files, such as the commit and the contents of a directory. Each is written to a temporary file first and only replaces the real one when the content differs, so its timestamp, and with it every object that includes it, only changes when something actually changed.
+All three are regenerated whenever they're needed, since they depend on things make can't see as files, such as the commit, the contents of a directory and the prototypes inside the sources. Each is written to a temporary file first and only replaces the real one when the content differs, so its timestamp, and with it every object that includes it, only changes when something actually changed.
 
 ### Tools
 
@@ -182,10 +212,10 @@ Every `.c` file in `tools/` is a separate program, built into `build/tools/` and
 
 The flake provides two things:
 
-- A dev shell, `nix develop`, with the compiler, `pkg-config`, tomlc17, `clang-tools` (clang-format and clangd), `gdb`, and `bear`, which records the compile commands clangd reads.
+- A dev shell, `nix develop`, with the compiler, `pkg-config`, tomlc17, Criterion, `clang-tools` (clang-format and clangd), `gdb`, and `bear`, which records the compile commands clangd reads.
 - A package, `nix build`, which runs the same Makefile. A Nix build has no `.git`, so the flake passes the commit in as `VERSION`.
 
-The docs workflow uses the dev shell too, so CI builds with the same toolchain as a local build.
+The CI workflows use the dev shell too, so CI builds and tests with the same toolchain as a local build.
 
 ## Docs
 

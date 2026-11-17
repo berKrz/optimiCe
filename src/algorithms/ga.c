@@ -76,7 +76,7 @@ static void* ga_cfg_base(void) { return &cfg; }
 // Defined with the encoding, under State
 static int words_per_ind(void);
 static int cut_index(double r);
-static int init_levels(uint64_t* lo, uint64_t* hi);
+UNITTEST int init_levels(uint64_t* lo, uint64_t* hi);
 
 // Each ratio must lie in (0, 1) and be strictly increasing, and the resulting cut indices must be
 // distinct and >= 1, so every cut actually splits the slice
@@ -159,7 +159,8 @@ static int cut_index(double r) { return (int) (cfg.ind_size * r); }
 // ind_size <= 63 guarantees 1ULL << ind_size stays well-defined
 static uint64_t max_level(void) { return (1ULL << cfg.ind_size) - 1ULL; }
 
-static double level_value(uint64_t level) {
+UNITTEST double level_value(uint64_t level);
+UNITTEST double level_value(uint64_t level) {
   return g_cfg.domain_min +
          (double) level * (g_cfg.domain_max - g_cfg.domain_min) / (double) max_level();
 }
@@ -168,7 +169,7 @@ static double level_value(uint64_t level) {
 // Returns 0 when there are none, i.e. when the range fits between two neighbouring levels
 // Levels decode to increasing values, so each end is a binary search over [0, max_level() + 1),
 // tested with level_value itself: "inside" means what decode_dim will later compute
-static int init_levels(uint64_t* lo, uint64_t* hi) {
+UNITTEST int init_levels(uint64_t* lo, uint64_t* hi) {
   // first: the lowest level at or above init_min (one past the last level if there is none)
   uint64_t first = 0, end = max_level() + 1;
   while (first < end) {
@@ -192,7 +193,8 @@ static int init_levels(uint64_t* lo, uint64_t* hi) {
   return 1;
 }
 
-static double decode_dim(const uint64_t* ind, int d) {
+UNITTEST double decode_dim(const uint64_t* ind, int d);
+UNITTEST double decode_dim(const uint64_t* ind, int d) {
   int      base  = d * cfg.ind_size;
   uint64_t level = 0;
   for (int b = 0; b < cfg.ind_size; b++)
@@ -308,7 +310,8 @@ static void fitness_range(const double* fits, int n, double* min_fit, double* ma
 // roulette: shift by the population's extreme so the worst individual gets weight 1
 // Minimization uses (max - f) + 1, maximization (f - min) + 1
 // The +1 is in fitness units, so selection pressure depends on the fitness scale
-static void weights_roulette(const double* fits, double* weights, int n) {
+UNITTEST void weights_roulette(const double* fits, double* weights, int n);
+UNITTEST void weights_roulette(const double* fits, double* weights, int n) {
   double min_fit, max_fit;
   fitness_range(fits, n, &min_fit, &max_fit);
   for (int i = 0; i < n; i++)
@@ -319,7 +322,8 @@ static void weights_roulette(const double* fits, double* weights, int n) {
 // population's average fitness spacing, eps = range / (n - 1), instead of 1 fitness unit
 // Weights are then divided by the range, landing in [eps', 1 + eps'] with eps' = 1 / (n - 1)
 // Pressure no longer depends on the fitness scale, and the worst individual keeps a small chance
-static void weights_roulette_normalized(const double* fits, double* weights, int n) {
+UNITTEST void weights_roulette_normalized(const double* fits, double* weights, int n);
+UNITTEST void weights_roulette_normalized(const double* fits, double* weights, int n) {
   double min_fit, max_fit;
   fitness_range(fits, n, &min_fit, &max_fit);
   double range = max_fit - min_fit;
@@ -339,7 +343,8 @@ static void weights_roulette_normalized(const double* fits, double* weights, int
 // Weights average 1, so each is the individual's expected number of copies: s for the best,
 // 2 - s for the worst
 // `order` is caller-provided sort space (n entries)
-static void weights_rank(const double* fits, double* weights, Ranked* order, int n) {
+UNITTEST void weights_rank(const double* fits, double* weights, Ranked* order, int n);
+UNITTEST void weights_rank(const double* fits, double* weights, Ranked* order, int n) {
   rank_by_fitness(fits, n, order, RANK_WORST_FIRST);
 
   const double s = cfg.rank_pressure;
@@ -427,7 +432,8 @@ static inline void swap_bit(uint64_t* a, uint64_t* b, int gi) {
 // Dimension-aware n-point crossover: within each dimension's slice, the cuts split the bits into
 // segments that alternate keep / swap, starting with keep
 // With one cut this is single-point crossover: bits [cut, ind_size) are swapped
-static void crossover_n_point(uint64_t* a, uint64_t* b) {
+UNITTEST void crossover_n_point(uint64_t* a, uint64_t* b);
+UNITTEST void crossover_n_point(uint64_t* a, uint64_t* b) {
   const DoubleList* c = &cfg.cut_points;
   for (int d = 0; d < g_cfg.n_dims; d++) {
     int base = d * cfg.ind_size;
@@ -443,7 +449,8 @@ static void crossover_n_point(uint64_t* a, uint64_t* b) {
 }
 
 // Uniform crossover: every bit is exchanged independently with probability 0.5
-static void crossover_uniform(uint64_t* a, uint64_t* b) {
+UNITTEST void crossover_uniform(uint64_t* a, uint64_t* b);
+UNITTEST void crossover_uniform(uint64_t* a, uint64_t* b) {
   for (int i = 0; i < total_bits(); i++)
     if (rng_next_bit()) swap_bit(a, b, i);
 }
@@ -476,7 +483,8 @@ static void mutate(uint64_t* ind, int index) {
 
 // Index of the best entry in fits[0..n) that isn't excluded
 // Strict comparison, so ties go to the earliest entry
-static int best_of(const double* fits, int n, int exclude) {
+UNITTEST int best_of(const double* fits, int n, int exclude);
+UNITTEST int best_of(const double* fits, int n, int exclude) {
   int best = -1;
   for (int k = 0; k < n; k++) {
     if (k == exclude) continue;

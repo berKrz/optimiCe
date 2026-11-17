@@ -1,0 +1,22 @@
+name: test
+
+# Fails when a test fails. -Werror is passed here rather than in the Makefile, as in the build check
+# Runs on main too, since two PRs that each passed can still disagree once both are merged
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+
+      # The dev shell brings the compiler, tomlc17 and Criterion, the same toolchain as a local build
+      - name: Test
+        run: nix develop --command make test CFLAGS="-O2 -g -Wall -Wextra -Werror"

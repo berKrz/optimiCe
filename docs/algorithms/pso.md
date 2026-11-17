@@ -2,7 +2,7 @@
 
 A swarm of particles moves through the search space. Each particle remembers the best position it has visited (its *pbest*), and the swarm shares the best position any particle has visited (the *gbest*). At every iteration each particle changes its velocity, pulled toward both of those positions, and moves.
 
-optimiCe implements the global-best PSO with an inertia weight (Shi & Eberhart, 1998), with optional linear inertia decay, velocity capping, and a choice between asynchronous and synchronous gbest updates. The run's result is the gbest: the best position any particle visited.
+optimiCe implements the global-best PSO with an inertia weight (Shi & Eberhart, 1998), with an optional linear inertia schedule, velocity capping, and a choice between asynchronous and synchronous gbest updates. The run's result is the gbest: the best position any particle visited.
 
 ## How it works
 
@@ -32,13 +32,13 @@ $$x_{i,d} \leftarrow x_{i,d} + v_{i,d}$$
 
 ## Options
 
-### Inertia decay
+### Inertia schedule
 
 `w` is the share of its velocity a particle keeps from one iteration to the next. Large values keep particles moving and exploring; small values slow them down so they settle around the best positions found.
 
-With `w_end` set, the inertia decays linearly from `w` at the first iteration to `w_end` at the last, moving the swarm from exploration toward exploitation over the run. `w = 0.9` decaying to `w_end = 0.4` is the classic setting (Shi & Eberhart, 1999). Leaving `w_end` unset keeps the inertia constant at `w`.
+With `w_end` set, the inertia changes linearly from `w` at the first iteration to `w_end` at the last. A decreasing schedule moves the swarm from exploration toward exploitation over the run: `w = 0.9` decaying to `w_end = 0.4` is the classic setting (Shi & Eberhart, 1999). `w_end` above `w` gives an increasing schedule instead, which some studies found converges faster (Zheng et al., 2003). Leaving `w_end` unset keeps the inertia constant at `w`.
 
-The decay follows the iteration budget, not the iterations actually run: a run that stops early never reaches `w_end`. With $T$ = `iterations`, iteration $t$ (counting from 0) uses
+The schedule follows the iteration budget, not the iterations actually run: a run that stops early never reaches `w_end`. With $T$ = `iterations`, iteration $t$ (counting from 0) uses
 
 $$w_t = w + (w_\text{end} - w) \, \frac{t}{T - 1}$$
 
@@ -71,7 +71,7 @@ The cap is applied after the velocity update and before the move. Without it, an
 |-----|------|---------|--------|-------------|
 | `swarm_size` | int | `30` |  | Number of particles |
 | `w` | float | `1.0` |  | Inertia weight (at the first iteration, when w_end is set) |
-| `w_end` | float | (unset) |  | Inertia at the last iteration, decaying linearly from w (unset = constant) |
+| `w_end` | float | (unset) |  | Inertia at the last iteration, changing linearly from w (unset = constant) |
 | `v_max` | float | `0.0` |  | Velocity cap as a fraction of the domain width (0 = off) |
 | `c1` | float | `2.0` |  | Cognitive coefficient: pull toward the particle's own best |
 | `c2` | float | `2.0` |  | Social coefficient: pull toward the swarm's best |
@@ -113,3 +113,4 @@ v_max      = 0.5   # half the domain's width: 5.12 per iteration
 - J. Kennedy and R. Eberhart, "Particle swarm optimization," *Proceedings of ICNN'95, International Conference on Neural Networks*, vol. 4, pp. 1942–1948, 1995. [doi:10.1109/ICNN.1995.488968](https://doi.org/10.1109/ICNN.1995.488968)
 - Y. Shi and R. Eberhart, "A modified particle swarm optimizer," *Proceedings of the IEEE International Conference on Evolutionary Computation*, pp. 69–73, 1998. [doi:10.1109/ICEC.1998.699146](https://doi.org/10.1109/ICEC.1998.699146)
 - Y. Shi and R. C. Eberhart, "Empirical study of particle swarm optimization," *Proceedings of the 1999 Congress on Evolutionary Computation*, pp. 1945–1950, 1999. [doi:10.1109/CEC.1999.785511](https://doi.org/10.1109/CEC.1999.785511)
+- Y. Zheng, L. Ma, L. Zhang and J. Qian, "Empirical study of particle swarm optimizer with an increasing inertia weight," *Proceedings of the 2003 Congress on Evolutionary Computation*, pp. 221–226, 2003.
