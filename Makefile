@@ -22,6 +22,21 @@ TARGET   = optimice
 SRCDIR   = src
 BUILDDIR = build
 
+# Sanitizers: SANITIZE is the list -fsanitize= takes, e.g. `make test SANITIZE=address,undefined`
+# or `make test SANITIZE=thread`. That build gets its own BUILDDIR, binary included, so it never
+# mixes with the normal one, and ./optimice stays the uninstrumented program
+# The runtime options make every sanitizer stop at its first report with status 86, which optimiCe
+# never uses itself; set any of them in the environment to override it
+comma := ,
+ifdef SANITIZE
+  BUILDDIR    := $(BUILDDIR)/sanitize-$(subst $(comma),-,$(SANITIZE))
+  TARGET      := $(BUILDDIR)/optimice
+  BUILD_FLAGS += -fsanitize=$(SANITIZE) -fno-sanitize-recover=all -fno-omit-frame-pointer
+  export ASAN_OPTIONS  ?= halt_on_error=1:exitcode=86
+  export UBSAN_OPTIONS ?= halt_on_error=1:print_stacktrace=1:exitcode=86
+  export TSAN_OPTIONS  ?= halt_on_error=1:exitcode=86
+endif
+
 # Every .c file in src/ and its directories is built: a new source needs no entry here
 # An algorithm is one file, src/algorithms/<name>.c, defining `<name>_algorithm`. ALGOS is the
 # list of those names, sorted so the generated registry doesn't depend on directory order
@@ -159,8 +174,28 @@ check-tests:
 	  done; \
 	done; exit $$status
 
-test-unit: check-tests $(UNIT_BIN)
+# Criterion ignores a test's exit status once the test has passed, so a sanitizer report from a
+# test process, a leak above all, wouldn't fail the run: under SANITIZE, every report goes to a
+# file in SANITIZER_LOGS instead, and any file there fails the run after printing it
+SANITIZER_LOGS = $(BUILDDIR)/sanitizer-logs
+
+# Criterion can't start under ThreadSanitizer (it fails to set up its shared-memory arena), so
+# a thread build skips the unit tests, without building them; the CLI tests still run the pool
+SKIP_UNIT = $(filter thread,$(subst $(comma), ,$(SANITIZE)))
+
+test-unit: check-tests $(if $(SKIP_UNIT),,$(UNIT_BIN))
+ifneq ($(SKIP_UNIT),)
+	@echo "unit tests skipped: Criterion can't run under ThreadSanitizer"
+else ifdef SANITIZE
+	@rm -rf $(SANITIZER_LOGS) && mkdir -p $(SANITIZER_LOGS); status=0; \
+	log=log_path=$(CURDIR)/$(SANITIZER_LOGS)/report; \
+	ASAN_OPTIONS="$$ASAN_OPTIONS:$$log" UBSAN_OPTIONS="$$UBSAN_OPTIONS:$$log" \
+	  TSAN_OPTIONS="$$TSAN_OPTIONS:$$log" $(UNIT_BIN) || status=1; \
+	for f in $(SANITIZER_LOGS)/*; do [ -e "$$f" ] || continue; cat "$$f"; status=1; done; \
+	exit $$status
+else
 	$(UNIT_BIN)
+endif
 
 # Every tests/cli/test-*.sh, each running the program as a user would; all run even after a failure
 test-cli: check-tests $(TARGET)

@@ -98,7 +98,7 @@ Everything a run reads or writes while it runs is thread-local: `g_cfg`, each al
 
 ### The worker pool
 
-Jobs run on C11 threads, `min(jobs, CPU cores)` of them; more threads than cores would only add switching overhead for CPU-bound jobs. Every job is known up front, so the pool is just an atomic counter: each worker takes the next job number, runs it, and takes another until none remain.
+Jobs run on POSIX threads, `min(jobs, CPU cores)` of them; more threads than cores would only add switching overhead for CPU-bound jobs. Every job is known up front, so the pool is just an atomic counter: each worker takes the next job number, runs it, and takes another until none remain.
 
 The one shared thing is the printer, behind a mutex. Jobs finish in any order, but results must come out in job order. The printer marks each finished job and prints every result it can reach: a job's line, and its row in the results file, come out once it and every job before it have finished.
 
@@ -154,9 +154,17 @@ The algorithms' common checks are written against the registry and the field tab
 
 Every `tests/cli/test-*.sh` sources `tests/cli/lib.sh`, which runs each case in a fresh temporary directory, on a config written there as `case.toml`, so messages name the same file every time. A case's checks compare exit status, stdout and stderr, and print `ok N - name` or `not ok N - name` with the difference, in the TAP format. Error messages are matched exactly, apart from text written by another program, such as tomlc17's parse errors; results are checked by structure, since their numbers change with the algorithms.
 
+### Sanitizers
+
+Both layers also run against instrumented builds: `make test SANITIZE=<list>` passes the list to `-fsanitize=`, and builds everything, binary included, under `build/sanitize-<list>/`, so an instrumented object never ends up in the normal build. The Makefile also sets each sanitizer's runtime options: stop at the first report, with exit status 86, which the program never uses itself.
+
+In the shell layer, a report fails its case like any wrong exit status. The unit layer needs more: Criterion ignores a test process's exit status once the test has passed, so a leak reported when that process exits would go unnoticed. Under `SANITIZE`, `make test-unit` sends every report to a file instead, and fails when any exists. Under `thread`, it skips the unit tests altogether, since Criterion can't start under ThreadSanitizer; the shell tests still run batches on the real thread pool.
+
+Two configurations cover the program: `address,undefined` for memory errors, leaks and undefined behavior, and `thread` for data races. ASan and TSan can't share a build.
+
 ### Guards
 
-`make test` first checks that every algorithm in `src/algorithms/` has its own `tests/unit/test-<name>.c` and `tests/cli/test-<name>.sh`, and stops before building anything when one is missing. A GitHub Actions workflow runs `make test`, with warnings as errors, on every pull request and every push to `main`.
+`make test` first checks that every algorithm in `src/algorithms/` has its own `tests/unit/test-<name>.c` and `tests/cli/test-<name>.sh`, and stops before building anything when one is missing. A GitHub Actions workflow runs `make test`, with warnings as errors, on every pull request and every push to `main`: plain, under `address,undefined` and under `thread`, each as its own check.
 
 ## Build
 

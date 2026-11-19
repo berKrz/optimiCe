@@ -1,9 +1,9 @@
 #include <criterion/criterion.h>
 #include <criterion/new/assert.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <threads.h>
 
 #include "helpers.h"
 
@@ -102,18 +102,18 @@ typedef struct {
   RunResult    res;
 } Job;
 
-static mtx_t lock;
-static cnd_t all_ready;
-static int   ready;
+static pthread_mutex_t lock;
+static pthread_cond_t  all_ready;
+static int             ready;
 
-static int run_in_thread(void* arg) {
+static void* run_in_thread(void* arg) {
   Job* job = arg;
-  mtx_lock(&lock);
-  if (++ready == THREADS) cnd_broadcast(&all_ready);
-  while (ready < THREADS) cnd_wait(&all_ready, &lock);
-  mtx_unlock(&lock);
+  pthread_mutex_lock(&lock);
+  if (++ready == THREADS) pthread_cond_broadcast(&all_ready);
+  while (ready < THREADS) pthread_cond_wait(&all_ready, &lock);
+  pthread_mutex_unlock(&lock);
   job->res = run_job_of(job->batch, job->job);
-  return 0;
+  return NULL;
 }
 
 // The first integer field of the algorithm's table, as "key = <twice its default>": a second
@@ -147,16 +147,16 @@ Test(algorithms, jobs_on_threads) {
     int       dims[2] = {10, 9};
 
     Job jobs[THREADS];
-    for (int t = 0; t < THREADS; t++) jobs[t] = (Job){.batch = &b, .job = t % 2};
-    mtx_init(&lock, mtx_plain);
-    cnd_init(&all_ready);
+    for (int t = 0; t < THREADS; t++) jobs[t] = (Job) {.batch = &b, .job = t % 2};
+    pthread_mutex_init(&lock, NULL);
+    pthread_cond_init(&all_ready, NULL);
     ready = 0;
-    thrd_t threads[THREADS];
+    pthread_t threads[THREADS];
     for (int t = 0; t < THREADS; t++)
-      cr_assert(eq(int, thrd_create(&threads[t], run_in_thread, &jobs[t]), thrd_success));
-    for (int t = 0; t < THREADS; t++) thrd_join(threads[t], NULL);
-    cnd_destroy(&all_ready);
-    mtx_destroy(&lock);
+      cr_assert(eq(int, pthread_create(&threads[t], NULL, run_in_thread, &jobs[t]), 0));
+    for (int t = 0; t < THREADS; t++) pthread_join(threads[t], NULL);
+    pthread_cond_destroy(&all_ready);
+    pthread_mutex_destroy(&lock);
 
     for (int t = 0; t < THREADS; t++) {
       char what[64];

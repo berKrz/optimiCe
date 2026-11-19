@@ -1,8 +1,8 @@
+#include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <threads.h>
 #include <unistd.h>
 
 #include "config/config.h"
@@ -81,14 +81,14 @@ static void job_finished(Printer* p, int j) {
 // its own results[j], so workers never wait for each other; the mutex only guards the printer
 
 typedef struct {
-  const Batch* batch;
-  RunResult*   results;
-  Printer*     printer;
-  atomic_int   next;  // next job to hand out
-  mtx_t        print_lock;
+  const Batch*    batch;
+  RunResult*      results;
+  Printer*        printer;
+  atomic_int      next;  // next job to hand out
+  pthread_mutex_t print_lock;
 } Pool;
 
-static int worker(void* arg) {
+static void* worker(void* arg) {
   Pool* pool  = arg;
   int   total = batch_jobs(pool->batch);
 
@@ -98,11 +98,11 @@ static int worker(void* arg) {
 
     run_job(pool->batch, j, &pool->results[j]);
 
-    mtx_lock(&pool->print_lock);
+    pthread_mutex_lock(&pool->print_lock);
     job_finished(pool->printer, j);
-    mtx_unlock(&pool->print_lock);
+    pthread_mutex_unlock(&pool->print_lock);
   }
-  return 0;
+  return NULL;
 }
 
 // More threads than cores only adds switching overhead for CPU-bound jobs
@@ -114,20 +114,20 @@ static int thread_count(int total) {
 
 static void run_pool(Pool* pool, int n_threads) {
   atomic_init(&pool->next, 0);
-  if (mtx_init(&pool->print_lock, mtx_plain) != thrd_success) die("could not create a mutex");
+  if (pthread_mutex_init(&pool->print_lock, NULL) != 0) die("could not create a mutex");
 
   if (n_threads == 1) {
     worker(pool);  // nothing to share the work with: run it on the calling thread
   } else {
-    thrd_t* threads = xmalloc((size_t) n_threads * sizeof(thrd_t));
+    pthread_t* threads = xmalloc((size_t) n_threads * sizeof(pthread_t));
     for (int i = 0; i < n_threads; i++)
-      if (thrd_create(&threads[i], worker, pool) != thrd_success)
+      if (pthread_create(&threads[i], NULL, worker, pool) != 0)
         die("could not start a worker thread");
-    for (int i = 0; i < n_threads; i++) thrd_join(threads[i], NULL);
+    for (int i = 0; i < n_threads; i++) pthread_join(threads[i], NULL);
     free(threads);
   }
 
-  mtx_destroy(&pool->print_lock);
+  pthread_mutex_destroy(&pool->print_lock);
 }
 
 // --- Entry point ---

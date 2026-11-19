@@ -1,7 +1,7 @@
 #include <criterion/criterion.h>
 #include <criterion/new/assert.h>
+#include <pthread.h>
 #include <stdint.h>
-#include <threads.h>
 
 #include "unittest.h"
 
@@ -65,9 +65,9 @@ Test(rng, different_seeds_different_streams) {
   cr_expect(eq(int, same, 0));
 }
 
-static int draw_in_thread(void* out) {
+static void* draw_in_thread(void* out) {
   draw_stream(9, out);
-  return 0;
+  return NULL;
 }
 
 // Every thread has its own stream: two threads seeded alike draw the same numbers as this thread
@@ -80,10 +80,10 @@ Test(rng, streams_are_per_thread) {
   double before = rng_next_double();
 
   static double streams[2][STREAM_LEN];
-  thrd_t        threads[2];
+  pthread_t     threads[2];
   for (int t = 0; t < 2; t++)
-    cr_assert(eq(int, thrd_create(&threads[t], draw_in_thread, streams[t]), thrd_success));
-  for (int t = 0; t < 2; t++) thrd_join(threads[t], NULL);
+    cr_assert(eq(int, pthread_create(&threads[t], NULL, draw_in_thread, streams[t]), 0));
+  for (int t = 0; t < 2; t++) pthread_join(threads[t], NULL);
 
   double after = rng_next_double();
 

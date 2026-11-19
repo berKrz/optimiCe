@@ -1,6 +1,8 @@
 name: test
 
 # Fails when a test fails. -Werror is passed here rather than in the Makefile, as in the build check
+# The tests run three times: plain, under ASan with UBSan, and under TSan, which can't share a build
+# with ASan. Each run is its own check, and one failing doesn't cancel the others
 # Runs on main too, since two PRs that each passed can still disagree once both are merged
 on:
   pull_request:
@@ -12,11 +14,24 @@ permissions:
 
 jobs:
   test:
+    name: test (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: plain
+            sanitize: ""
+          - name: address,undefined
+            sanitize: address,undefined
+          - name: thread
+            sanitize: thread
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
 
       # The dev shell brings the compiler, tomlc17 and Criterion, the same toolchain as a local build
       - name: Test
-        run: nix develop --command make test CFLAGS="-O2 -g -Wall -Wextra -Werror"
+        run: >-
+          nix develop --command
+          make test SANITIZE="${{ matrix.sanitize }}" CFLAGS="-O2 -g -Wall -Wextra -Werror"

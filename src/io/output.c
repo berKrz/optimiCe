@@ -63,8 +63,9 @@ UNITTEST FILE* open_generated(const char* dir, const char* config_path, const st
   strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", now);
 
   size_t cap = strlen(dir) + strlen(stem) + strlen(stamp) + 16;
-  out_path   = xmalloc(cap);
-  FILE* f    = NULL;
+  free(out_path);  // a name from an earlier call
+  out_path = xmalloc(cap);
+  FILE* f  = NULL;
   for (int k = 1; k <= 99 && !f; k++) {
     if (k == 1) snprintf(out_path, cap, "%s%s-%s.csv", dir, stem, stamp);
     else snprintf(out_path, cap, "%s%s-%s-%d.csv", dir, stem, stamp, k);
@@ -180,4 +181,5 @@ void output_close(void) {
   if (fclose(out) != 0) die_errno("cannot write", out_path);
   out = NULL;
   free(out_path);
+  out_path = NULL;
 }
