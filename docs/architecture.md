@@ -98,7 +98,7 @@ Everything a run reads or writes while it runs is thread-local: `g_cfg`, each al
 
 ### The worker pool
 
-Jobs run on C11 threads, `min(jobs, CPU cores)` of them; more threads than cores would only add switching overhead for CPU-bound jobs. Every job is known up front, so the pool is just an atomic counter: each worker takes the next job number, runs it, and takes another until none remain.
+Jobs run on POSIX threads, `min(jobs, CPU cores)` of them; more threads than cores would only add switching overhead for CPU-bound jobs. Every job is known up front, so the pool is just an atomic counter: each worker takes the next job number, runs it, and takes another until none remain.
 
 The one shared thing is the printer, behind a mutex. Jobs finish in any order, but results must come out in job order. The printer marks each finished job and prints every result it can reach: a job's line, and its row in the results file, come out once it and every job before it have finished.
 
