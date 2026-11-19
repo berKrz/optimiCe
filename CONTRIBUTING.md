@@ -29,11 +29,11 @@ A file missing from `compile_commands.json` gets the flags of the most similar f
 - Keep each commit to one change, with a message in the [Conventional Commits](https://www.conventionalcommits.org) style: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `build:`, `ci:`, followed by a short summary.
 - Before opening a pull request, check that:
   - `make` builds without warnings;
-  - `make test` passes;
+  - `make test` passes, plain and under each sanitizer (see [Sanitizers](#sanitizers));
   - the files you changed are formatted with `clang-format -i`;
   - `make docs` leaves the docs unchanged, or you've committed what it changed.
 
-Every pull request runs three checks: the build, with warnings as errors; `make test`; and the docs, which are regenerated and must match what's committed. When the docs check fails, its log shows the exact difference: run `make docs` and commit the result.
+Every pull request runs three checks: the build, with warnings as errors; `make test`, plain and under each sanitizer; and the docs, which are regenerated and must match what's committed. When the docs check fails, its log shows the exact difference: run `make docs` and commit the result.
 
 ## Conventions
 
@@ -78,6 +78,17 @@ expect_error "Error at 'case.toml [[run]] pso-1': n_dims must be at least 1"
 ```
 
 Every case runs in a fresh temporary directory, on a config written there as `case.toml`. Error messages are matched exactly; only the part another program writes, such as tomlc17's or the system's text, is left out. A rejected value sits next to the accepted value just inside, read back with `expect_dump`. Results are checked by their structure, never by their numbers, which would change with any change to an algorithm.
+
+### Sanitizers
+
+`SANITIZE` builds and tests an instrumented copy of the program, under its own directory in `build/`, so it never mixes with the normal build. It takes the same list as GCC's `-fsanitize=`, and CI runs two:
+
+```sh
+make test SANITIZE=address,undefined    # memory errors, leaks and undefined behavior
+make test SANITIZE=thread               # data races
+```
+
+A sanitizer stops the program at its first report, with exit status 86, so the case that triggered it fails and shows the report. Under `thread`, the unit tests are skipped with a message, since Criterion can't run under ThreadSanitizer; the shell tests still run the thread pool. Set `ASAN_OPTIONS`, `UBSAN_OPTIONS` or `TSAN_OPTIONS` to override the defaults while debugging.
 
 ## Adding an algorithm
 
