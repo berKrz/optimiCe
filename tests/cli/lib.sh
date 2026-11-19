@@ -5,7 +5,6 @@
 : "${OPTIMICE:?run through make test-cli}"
 
 n=0
-failed=0
 root=$(mktemp -d)
 trap 'rm -rf "$root"' EXIT
 
@@ -40,11 +39,12 @@ run() {
 
 pass() { echo "ok $n - $name"; }
 
-# Fails the case; stdin explains why, printed as TAP diagnostics
+# Fails the case; stdin explains why, printed as TAP diagnostics. Failures are counted in a file,
+# not a variable, since `... | fail` runs fail in a subshell
 fail() {
   echo "not ok $n - $name"
   sed 's/^/#   /'
-  failed=$((failed + 1))
+  echo >> "$root/failed"
 }
 
 # Checks the last run failed with the error $1, followed by the --help hint unless $2 is "nohint",
@@ -103,5 +103,5 @@ expect_dump() {
 # Ends the script: the TAP plan, then a failing status if any case failed
 finish() {
   echo "1..$n"
-  [ "$failed" -eq 0 ]
+  [ ! -s "$root/failed" ]
 }
