@@ -179,8 +179,14 @@ check-tests:
 # file in SANITIZER_LOGS instead, and any file there fails the run after printing it
 SANITIZER_LOGS = $(BUILDDIR)/sanitizer-logs
 
-test-unit: check-tests $(UNIT_BIN)
-ifdef SANITIZE
+# Criterion can't start under ThreadSanitizer (it fails to set up its shared-memory arena), so
+# a thread build skips the unit tests, without building them; the CLI tests still run the pool
+SKIP_UNIT = $(filter thread,$(subst $(comma), ,$(SANITIZE)))
+
+test-unit: check-tests $(if $(SKIP_UNIT),,$(UNIT_BIN))
+ifneq ($(SKIP_UNIT),)
+	@echo "unit tests skipped: Criterion can't run under ThreadSanitizer"
+else ifdef SANITIZE
 	@rm -rf $(SANITIZER_LOGS) && mkdir -p $(SANITIZER_LOGS); status=0; \
 	log=log_path=$(CURDIR)/$(SANITIZER_LOGS)/report; \
 	ASAN_OPTIONS="$$ASAN_OPTIONS:$$log" UBSAN_OPTIONS="$$UBSAN_OPTIONS:$$log" \
