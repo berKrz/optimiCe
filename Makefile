@@ -174,8 +174,22 @@ check-tests:
 	  done; \
 	done; exit $$status
 
+# Criterion ignores a test's exit status once the test has passed, so a sanitizer report from a
+# test process, a leak above all, wouldn't fail the run: under SANITIZE, every report goes to a
+# file in SANITIZER_LOGS instead, and any file there fails the run after printing it
+SANITIZER_LOGS = $(BUILDDIR)/sanitizer-logs
+
 test-unit: check-tests $(UNIT_BIN)
+ifdef SANITIZE
+	@rm -rf $(SANITIZER_LOGS) && mkdir -p $(SANITIZER_LOGS); status=0; \
+	log=log_path=$(CURDIR)/$(SANITIZER_LOGS)/report; \
+	ASAN_OPTIONS="$$ASAN_OPTIONS:$$log" UBSAN_OPTIONS="$$UBSAN_OPTIONS:$$log" \
+	  TSAN_OPTIONS="$$TSAN_OPTIONS:$$log" $(UNIT_BIN) || status=1; \
+	for f in $(SANITIZER_LOGS)/*; do [ -e "$$f" ] || continue; cat "$$f"; status=1; done; \
+	exit $$status
+else
 	$(UNIT_BIN)
+endif
 
 # Every tests/cli/test-*.sh, each running the program as a user would; all run even after a failure
 test-cli: check-tests $(TARGET)
