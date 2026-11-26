@@ -137,6 +137,10 @@ StopState stop_init(void);
 // per-iteration best can get worse
 int end_iteration(StopState* st, double current_best);
 
+// Fraction of the run's budget used, counting the current iteration as underway: in (0, 1], and
+// exactly 1 on the last iteration; call it before end_iteration
+double progress(const StopState* st);
+
 // What a run hands back
 typedef struct {
   double    fitness;      // best fitness found

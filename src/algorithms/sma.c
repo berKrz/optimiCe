@@ -135,16 +135,15 @@ static void update_weights(Population* pop) {
   }
 }
 
-// Moves every slime for iteration `iter` (0-based), then evaluates it
+// Moves every slime for an iteration at `run_progress`, then evaluates it
 // In the paper's symbols: best_pos is Xb and best_fitness DF; a slime approaches the best with
 // probability p (approach_prob), as Xb + vb * (W * X_A - X_B), where vb (pull) is drawn from
 // [-a, a] (pull_range) and A, B are two random slimes (peer_a, peer_b); otherwise it contracts,
 // X = vc * X, with vc (decay) drawn from [-b, b] (decay_range)
-static void move_slimes(Population* pop, int iter) {
-  // Both ranges shrink to 0 over the run; the progress is 1-indexed, (iter + 1) / iterations
-  double progress    = (double) (iter + 1) / (double) g_cfg.iterations;
-  double pull_range  = atanh(-progress + 1.0);
-  double decay_range = 1.0 - progress;
+static void move_slimes(Population* pop, double run_progress) {
+  // Both ranges shrink to 0 over the run, reaching it at progress 1
+  double pull_range  = atanh(-run_progress + 1.0);
+  double decay_range = 1.0 - run_progress;
 
   for (int i = 0; i < cfg.pop_size; i++) {
     double* x = position_of(pop, i);
@@ -216,7 +215,7 @@ static void sma_run(RunResult* out) {
   StopState stop = stop_init();
   for (int i = 0; i < g_cfg.iterations; i++) {
     update_weights(&pop);
-    move_slimes(&pop, i);
+    move_slimes(&pop, progress(&stop));
 
     if (g_opts.interactive) {
       print_iteration_header(i);

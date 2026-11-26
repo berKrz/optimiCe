@@ -11,7 +11,6 @@ static void setup(void) {
   g_cfg_rw.domain_max = 5.0;
   g_cfg_rw.init_min   = -5.0;
   g_cfg_rw.init_max   = 5.0;
-  g_cfg_rw.iterations = 11;
 }
 
 TestSuite(pso, .init = setup);
@@ -20,13 +19,19 @@ TestSuite(pso, .init = setup);
 
 // --- Inertia ---
 
+// Progress at iteration `i` (0-based) of an 11-iteration run
+static double at(int i) { return (i + 1.0) / 11.0; }
+
+// Progress at its first iteration
+static const double FIRST = 1.0 / 11.0;
+
 // Linear from w at the first iteration to w_end at the last
 Test(pso, inertia_schedule) {
   PARAM("w")     = 0.9;
   PARAM("w_end") = 0.4;
-  cr_expect(eq(dbl, inertia(0), 0.9));
-  cr_expect(epsilon_eq(dbl, inertia(5), 0.65, 1e-15));
-  cr_expect(eq(dbl, inertia(10), 0.4));
+  cr_expect(eq(dbl, inertia(at(0), FIRST), 0.9));
+  cr_expect(epsilon_eq(dbl, inertia(at(5), FIRST), 0.65, 1e-15));
+  cr_expect(eq(dbl, inertia(at(10), FIRST), 0.4));
 }
 
 // Both ends exact, including pairs where w + (w_end - w) rounds away from w_end
@@ -39,24 +44,25 @@ Test(pso, inertia_endpoints_exact) {
   for (size_t k = 0; k < sizeof pairs / sizeof pairs[0]; k++) {
     PARAM("w")     = pairs[k][0];
     PARAM("w_end") = pairs[k][1];
-    cr_expect(eq(dbl, inertia(0), pairs[k][0]), "w = %g, w_end = %g", pairs[k][0], pairs[k][1]);
-    cr_expect(eq(dbl, inertia(10), pairs[k][1]), "w = %g, w_end = %g", pairs[k][0], pairs[k][1]);
+    cr_expect(eq(dbl, inertia(at(0), FIRST), pairs[k][0]), "w = %g, w_end = %g", pairs[k][0],
+              pairs[k][1]);
+    cr_expect(eq(dbl, inertia(at(10), FIRST), pairs[k][1]), "w = %g, w_end = %g", pairs[k][0],
+              pairs[k][1]);
   }
 }
 
-// No division by iterations - 1 = 0
+// A first iteration that is also the last: w, with no division by 1 - 1 = 0
 Test(pso, inertia_single_iteration) {
-  PARAM("w")          = 0.9;
-  PARAM("w_end")      = 0.4;
-  g_cfg_rw.iterations = 1;
-  cr_expect(eq(dbl, inertia(0), 0.9));
+  PARAM("w")     = 0.9;
+  PARAM("w_end") = 0.4;
+  cr_expect(eq(dbl, inertia(1.0, 1.0), 0.9));
 }
 
 // Constant inertia stays bit-identical to w
 Test(pso, inertia_constant) {
   PARAM("w")     = 0.7;
   PARAM("w_end") = 0.7;
-  for (int i = 0; i < 11; i++) cr_expect(eq(dbl, inertia(i), 0.7), "iteration %d", i);
+  for (int i = 0; i < 11; i++) cr_expect(eq(dbl, inertia(at(i), FIRST), 0.7), "iteration %d", i);
 }
 
 // --- Velocity cap ---

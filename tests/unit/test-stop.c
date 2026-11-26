@@ -131,3 +131,17 @@ Test(stop, zero_stagnation_is_off) {
     cr_assert(eq(int, end_iteration(&st, 5.0), 0), "stopped at iteration %d", i);
   cr_expect(eq(int, st.stale, 999));
 }
+
+// --- Progress ---
+
+// The current iteration counts as underway: 1/4 on the first of 4, exactly 1 on the last
+Test(stop, progress_counts_current_iteration) {
+  g_cfg_rw.iterations = 4;
+  StopState st        = stop_init();
+  cr_expect(eq(dbl, progress(&st), 0.25));
+  end_iteration(&st, 5.0);
+  cr_expect(eq(dbl, progress(&st), 0.5));
+  end_iteration(&st, 5.0);
+  end_iteration(&st, 5.0);
+  cr_expect(eq(dbl, progress(&st), 1.0));
+}

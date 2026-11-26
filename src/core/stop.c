@@ -15,6 +15,8 @@ StopState stop_init(void) {
   };
 }
 
+double progress(const StopState* st) { return (st->iterations + 1.0) / g_cfg.iterations; }
+
 int end_iteration(StopState* st, double current_best) {
   // Progress lines are for a batch of one job, and not under --interactive, which prints its own
   // view of every iteration
