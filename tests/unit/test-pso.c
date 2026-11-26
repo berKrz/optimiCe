@@ -26,7 +26,22 @@ Test(pso, inertia_schedule) {
   PARAM("w_end") = 0.4;
   cr_expect(eq(dbl, inertia(0), 0.9));
   cr_expect(epsilon_eq(dbl, inertia(5), 0.65, 1e-15));
-  cr_expect(epsilon_eq(dbl, inertia(10), 0.4, 1e-15));
+  cr_expect(eq(dbl, inertia(10), 0.4));
+}
+
+// Both ends exact, including pairs where w + (w_end - w) rounds away from w_end
+Test(pso, inertia_endpoints_exact) {
+  const double pairs[][2] = {
+      {0.9, 0.4},
+      {1.2, 0.1},
+      {0.4, 0.9}
+  };
+  for (size_t k = 0; k < sizeof pairs / sizeof pairs[0]; k++) {
+    PARAM("w")     = pairs[k][0];
+    PARAM("w_end") = pairs[k][1];
+    cr_expect(eq(dbl, inertia(0), pairs[k][0]), "w = %g, w_end = %g", pairs[k][0], pairs[k][1]);
+    cr_expect(eq(dbl, inertia(10), pairs[k][1]), "w = %g, w_end = %g", pairs[k][0], pairs[k][1]);
+  }
 }
 
 // No division by iterations - 1 = 0
@@ -87,7 +102,7 @@ static void check_count(const char* extra, int pbest_evaluations) {
            "[common]\nseed = 3\niterations = 25\n[[run]]\nalgorithm = \"pso\"\n%s", extra);
   Batch     b   = load_toml(toml);
   RunResult res = run_job_of(&b, 0);
-  uint64_t  n   = (uint64_t) * (int*) algo_field(&b.runs[0], "swarm_size");
+  uint64_t  n   = (uint64_t) *(int*) algo_field(&b.runs[0], "swarm_size");
   cr_expect(eq(u64, res.evaluations, n * (1 + pbest_evaluations) + n * res.stop.iterations), "%s",
             extra);
   free(res.pos);

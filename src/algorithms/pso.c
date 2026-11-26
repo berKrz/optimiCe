@@ -174,11 +174,13 @@ static void init_swarm(Swarm* swarm) {
 
 // Inertia for iteration `iter` (0-based): linear from w at the first iteration to w_end at the
 // last
-// With w_end == w the difference is exactly 0, so constant inertia stays bit-identical to w
+// Interpolated from whichever end is nearer, so the first iteration gets exactly w and the last
+// exactly w_end; with w_end == w the difference is exactly 0, so constant inertia stays w
 UNITTEST double inertia(int iter);
 UNITTEST double inertia(int iter) {
   double frac = g_cfg.iterations > 1 ? (double) iter / (g_cfg.iterations - 1) : 0.0;
-  return cfg.w + (cfg.w_end - cfg.w) * frac;
+  double diff = cfg.w_end - cfg.w;
+  return frac < 0.5 ? cfg.w + diff * frac : cfg.w_end - diff * (1.0 - frac);
 }
 
 static void update_swarm(Swarm* swarm, double w) {
