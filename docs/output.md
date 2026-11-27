@@ -20,13 +20,26 @@ Best solution:
    pos: [  -0.000  -0.000 ]
    fitness = 7.872174776306589e-11
 
+Stopped: iteration budget of 100 reached
+
 Iterations: 100
 Evaluations: 3030
 Algorithm: pso    Seed: 0x0000002a
 ==================================================
 ```
 
-When the run stops early, the result says why, e.g. `Stopped early: no improvement for 200 iterations`. The seed is the one the job ran with: setting `seed` to it reproduces the run, which is what makes a generated seed useful.
+The result always says why the run stopped, and whether that was before its budget ran out:
+
+```
+Stopped: iteration budget of 100 reached
+Stopped: evaluation budget of 3000 reached
+Stopped early: iteration cap of 80 reached
+Stopped early: evaluation cap of 5000 reached
+Stopped early: target fitness 1e-05 reached
+Stopped early: no improvement for 200 iterations
+```
+
+When the [exact evaluation cutoff](configuration.md#evaluation-cutoff) skipped evaluations in the last iteration, the evaluations line says how many, e.g. `Evaluations: 3000 (12 skipped: the budget ran out mid-iteration)`. The seed is the one the job ran with: setting `seed` to it reproduces the run, which is what makes a generated seed useful.
 
 ## A batch
 
@@ -35,15 +48,15 @@ A batch of several jobs prints a header, then one line per job:
 ```
 Batch: 2 runs x 3 replicates = 6 jobs    Base seed: 0x0000002a
 
-pso-1  r0  seed 0x0000002a  best = 1.989918115088523         iters 1000  evals 30030
-pso-1  r1  seed 0x0000002b  best = 4.974867135774531         iters 1000  evals 30030
+pso-1  r0  seed 0x0000002a  best = 1.989918115088523         iters 1000  evals 30030       iterations
+pso-1  r1  seed 0x0000002b  best = 4.974867135774531         iters 1000  evals 30030       iterations
 pso-1  r2  seed 0x0000002c  best = 44.85104794059824         iters 369   evals 11100       stagnation
 ga-1   r0  seed 0x0000002a  best = 57.63045559403642         iters 413   evals 16560       stagnation
 ga-1   r1  seed 0x0000002b  best = 39.94383383288411         iters 490   evals 19640       stagnation
 ga-1   r2  seed 0x0000002c  best = 37.584355934977964        iters 499   evals 20000       stagnation
 ```
 
-Each line holds the run's label, the replicate, the job's seed, the best fitness, the iterations completed, the fitness evaluations used, and the early stop, `target` or `stagnation`, when there was one.
+Each line holds the run's label, the replicate, the job's seed, the best fitness, the iterations completed, the fitness evaluations used, and why the run stopped: `iterations`, `evaluations`, `target` or `stagnation`.
 
 Jobs run in parallel on as many threads as there are CPU cores, up to the number of jobs; the thread count goes to stderr. Lines come out in job order, every replicate of the first run, then the second, and so on, each as soon as it and every job before it have finished. A job's result depends only on its seed, so the output is the same whatever the number of threads.
 
@@ -76,8 +89,8 @@ After the header comes the table, one row per job, in the same order as the term
 
 ```
 run,replicate,seed,fitness,iterations,evaluations,stop,position
-pso-1,0,0x0000002a,1.989918115088523,1000,30030,none,0.9949595703309596 -1.9433042650135142e-08 ...
-pso-1,1,0x0000002b,4.974867135774531,1000,30030,none,9.029679007347454e-05 -1.9299212039898897e-05 ...
+pso-1,0,0x0000002a,1.989918115088523,1000,30030,iterations,0.9949595703309596 -1.9433042650135142e-08 ...
+pso-1,1,0x0000002b,4.974867135774531,1000,30030,iterations,9.029679007347454e-05 -1.9299212039898897e-05 ...
 ```
 
 | Column        | Meaning                                                                          |
@@ -86,9 +99,9 @@ pso-1,1,0x0000002b,4.974867135774531,1000,30030,none,9.029679007347454e-05 -1.92
 | `replicate`   | Replicate number, from 0                                                         |
 | `seed`        | The job's seed, in hex; it can be pasted back into `seed =` to reproduce the job |
 | `fitness`     | Best fitness found                                                               |
-| `iterations`  | Iterations completed: fewer than the budget after an early stop                  |
-| `evaluations` | Fitness evaluations used                                                         |
-| `stop`        | `none`, `target` or `stagnation`                                                 |
+| `iterations`  | Iterations completed                                                             |
+| `evaluations` | Fitness evaluations used, not counting any the exact cutoff skipped              |
+| `stop`        | Why the run stopped: `iterations`, `evaluations`, `target` or `stagnation`       |
 | `position`    | The best position, its coordinates separated by spaces                           |
 
 Every number is written in the shortest form that reads back exactly, positions included, so the file holds the same doubles the run produced. The file is plain CSV, with `.` as the decimal separator and `,` between fields. Most CSV readers skip the header given a comment character, e.g. `pandas.read_csv(path, comment="#")` in Python or `read.csv(path, comment.char = "#")` in R.

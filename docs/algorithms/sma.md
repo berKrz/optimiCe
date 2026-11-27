@@ -14,7 +14,7 @@ Every slime starts at a position drawn uniformly from the init range, independen
 
 **Weights.** The slimes are ranked by fitness, best first. Each slime's distance from this iteration's best fitness, as a share of the spread between this iteration's best and worst, sets the size of its weights: one weight per dimension, each with its own random factor. Slimes in the better half get weights above 1, slimes in the worse half get weights below 1. With an odd population, the middle slime counts as better, as in the reference implementation. Since the share lies in [0, 1], the weights stay within [1, 1.30] for the better half and [0.70, 1] for the worse half.
 
-**Move ranges.** Two ranges shrink over the iteration budget: the *approach range* $a$, which shrinks from large values to 0, and the *contraction range* $b$, which shrinks linearly from 1 to 0. Both reach 0 at the last iteration of the budget.
+**Move ranges.** Two ranges shrink over the run's budget (see [Stopping](../configuration.md#stopping)): the *approach range* $a$, which shrinks from large values to 0, and the *contraction range* $b$, which shrinks linearly from 1 to 0. Under an iteration budget, both reach 0 at the budget's last iteration; under an evaluation budget, they end just above it.
 
 **Moves.** Slimes then move one at a time, in order. Each slime:
 
@@ -25,15 +25,15 @@ Every slime starts at a position drawn uniformly from the init range, independen
 3. Is brought back into the domain, coordinate by coordinate, according to `bounds` (see [Configuration](../configuration.md)).
 4. Is evaluated. If it beats the best so far, the best is updated at once, so the slimes after it in the same iteration already move toward the new best.
 
-Contraction scales the coordinate itself, so it pulls slimes toward 0, not toward the best position. At the last iteration of the budget the contraction range is 0, and a contracting coordinate lands exactly on 0. On benchmark functions whose optimum is at the origin, this pull helps the search; keep it in mind when comparing SMA with other algorithms on those functions.
+Contraction scales the coordinate itself, so it pulls slimes toward 0, not toward the best position. At the last iteration of an iteration budget the contraction range is 0, and a contracting coordinate lands exactly on 0. On benchmark functions whose optimum is at the origin, this pull helps the search; keep it in mind when comparing SMA with other algorithms on those functions.
 
-In the paper's notation: $S(i)$ is slime $i$'s fitness, $bF$ and $wF$ this iteration's best and worst fitness, $DF$ the best fitness so far and $X_b$ where it was found, $X_A$ and $X_B$ the two random slimes, and $t$ the iteration, counted from 1, out of a budget of $T$ iterations. The weights are
+In the paper's notation: $S(i)$ is slime $i$'s fitness, $bF$ and $wF$ this iteration's best and worst fitness, $DF$ the best fitness so far and $X_b$ where it was found, $X_A$ and $X_B$ the two random slimes, and $\pi$ the run's progress: under an iteration budget $t / T$, with $t$ the iteration counted from 1 out of $T$; under an evaluation budget, the share of the evaluations used when the iteration starts, setup's included. The weights are
 
 $$W_{i,d} = 1 \pm r \, \log_{10}\!\left(\frac{bF - S(i)}{bF - wF} + 1\right), \qquad r \sim U[0, 1)$$
 
 with $+$ for the better half and $-$ for the worse half. The move ranges and the approach probability are
 
-$$a = \operatorname{arctanh}\!\left(1 - \frac{t}{T}\right), \qquad b = 1 - \frac{t}{T}, \qquad p = \tanh \lvert S(i) - DF \rvert$$
+$$a = \operatorname{arctanh}(1 - \pi), \qquad b = 1 - \pi, \qquad p = \tanh \lvert S(i) - DF \rvert$$
 
 and each dimension of a slime that isn't re-initialized moves to
 

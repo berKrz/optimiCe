@@ -100,12 +100,33 @@ A coordinate can only cross a finite bound, so with both ends infinite the mode 
 
 ## Stopping
 
-`iterations` is the budget, the hard cap on every run. Two optional early stops end a run sooner:
+A run has two caps, `iterations` and `evaluations`, counting iterations (generations, for GA) and fitness evaluations. `budget` picks which of them is the run's **budget**: the cap that also paces the algorithm's schedules, such as PSO's inertia and SMA's move ranges. The budget must be set, to a positive value. The other cap is optional, `0` turning it off, and only stops a run early, as do:
 
 - `target_fitness`: stops once the algorithm's current best is at least as good as the target.
 - `stagnation`: stops after that many consecutive iterations without improving the best value seen so far. `0`, the default, disables it.
 
-A run reports how many iterations it completed, and whether and why it stopped early.
+```toml
+budget = "evaluations" # schedules follow the evaluations used
+evaluations = 30000    # the budget
+iterations = 2000      # an early stop on top of it
+```
+
+Every rule is checked at the end of each iteration, in the order target, stagnation, iterations, evaluations; when several are met in the same iteration, the first one is the reason reported. A run reports how many iterations it completed, how many evaluations it used, and why it stopped.
+
+### Schedules
+
+Under an iteration budget, a schedule moves one step per iteration and reaches its end on the budget's last iteration. Under an evaluation budget, it follows the share of the budget used so far, setup's evaluations included: an iteration doesn't know in advance how many evaluations it will use, so the schedule lands close to its end on the last iteration, by one iteration's share of the budget, rather than exactly on it. Either way, a run that stops early leaves its schedule unfinished.
+
+So the budget is part of what an experiment is: two runs with the same seed, one under `budget = "iterations"` and one under `budget = "evaluations"`, follow different schedules from the first iteration, even if they stop at the same point.
+
+### Evaluation cutoff
+
+An iteration evaluates many candidates, and the evaluation cap usually runs out partway through one. `evaluation_cutoff` says what happens to the rest of it, whenever `evaluations` is set, budget or not:
+
+- `exact` (the default): evaluations past the cap aren't made. Each gets the worst fitness there is, so it can't become the best, and isn't counted: the run uses exactly `evaluations` evaluations, as fixed-budget benchmarks require. The iteration still finishes, and the result is the best of the evaluations actually made.
+- `iteration`: the iteration finishes with every evaluation made, so a run can use up to one iteration's worth more than the cap.
+
+A cap smaller than the algorithm's setup isn't an error: setup runs, then one iteration, and the run stops. Under `exact`, some of the initial population is then never evaluated, and an algorithm that reports its final population, such as GA without elitism, can report a result that wasn't evaluated either.
 
 ## Validation
 
@@ -116,6 +137,7 @@ Messages name the file, the section and the key, and a run by its label:
 ```
 Error at 'example.toml [[run]] pso-1' [swarm-size]: unknown key for algorithm 'pso'
 Error at 'example.toml [[run]] pso-1': for eggholder, n_dims must be at most 2 (current: 3)
+Error at 'example.toml [[run]] sma-1': budget is "evaluations", so evaluations must be positive
 Error at 'example.toml [[run]] ga-1' [seed]: only allowed in [common]
 ```
 

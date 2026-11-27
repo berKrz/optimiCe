@@ -31,6 +31,8 @@ The count is the run's real cost because of two rules:
 - **The only way to reach a fitness function is through the counted path.** No algorithm can call a function without the call being counted.
 - **Every candidate solution is evaluated exactly once, when it's created.** An algorithm keeps the fitness of what it has already evaluated and never evaluates a solution again, nor evaluates one just to print it.
 
+The one exception is the [exact evaluation cutoff](configuration.md#evaluation-cutoff): once the evaluation cap is spent, a call on the counted path doesn't reach the function and isn't counted. It returns the worst fitness there is, +inf when minimizing and −inf when maximizing, so the candidate can't become the best. The count stays at the cap, and the number of calls skipped is reported with the result.
+
 ## sphere
 
 The sum of squares. Unimodal, smooth and separable: the easiest function in the catalog, and the usual baseline. Defined everywhere, so it can be searched without bounds.
