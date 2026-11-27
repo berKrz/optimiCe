@@ -33,7 +33,7 @@ $$W_{i,d} = 1 \pm r \, \log_{10}\!\left(\frac{bF - S(i)}{bF - wF} + 1\right), \q
 
 with $+$ for the better half and $-$ for the worse half. The move ranges and the approach probability are
 
-$$a = \operatorname{arctanh}(1 - \pi), \qquad b = 1 - \pi, \qquad p = \tanh \lvert S(i) - DF \rvert$$
+$$a = \mathrm{arctanh}\left(1 - \frac{t}{T}\right), \qquad b = 1 - \frac{t}{T}, \qquad p = \tanh \lvert S(i) - DF \rvert$$
 
 and each dimension of a slime that isn't re-initialized moves to
 
