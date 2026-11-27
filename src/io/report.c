@@ -51,10 +51,19 @@ void print_result(const RunResult* r) {
   fmt_exact(fit, r->fitness);
   printf("   fitness = %s\n\n", fit);
 
-  if (r->stop.reason == STOP_TARGET)
+  StopReason why = r->stop.reason;
+  if (why == STOP_TARGET)
     printf("Stopped early: target fitness %g reached\n\n", g_cfg.target_fitness);
-  else if (r->stop.reason == STOP_STAGNATION)
+  else if (why == STOP_STAGNATION)
     printf("Stopped early: no improvement for %d iterations\n\n", g_cfg.stagnation);
+  else if (why == STOP_ITERATIONS && g_cfg.budget == BUDGET_ITERATIONS)
+    printf("Stopped: iteration budget of %d reached\n\n", g_cfg.iterations);
+  else if (why == STOP_ITERATIONS)
+    printf("Stopped early: iteration cap of %d reached\n\n", g_cfg.iterations);
+  else if (why == STOP_EVALUATIONS && g_cfg.budget == BUDGET_EVALUATIONS)
+    printf("Stopped: evaluation budget of %d reached\n\n", g_cfg.evaluations);
+  else if (why == STOP_EVALUATIONS)
+    printf("Stopped early: evaluation cap of %d reached\n\n", g_cfg.evaluations);
 
   printf("Iterations: %d\n", r->stop.iterations);
   printf("Evaluations: %" PRIu64 "\n", r->evaluations);
@@ -108,7 +117,5 @@ void print_job_line(const JobLineWidths* w, const char* label, int replicate, ui
   // best is padded to its longest form, "best = " and 24 characters: -1.2345678901234567e-308
   printf("%-*s  r%-*d  seed 0x%08x  %-31s  iters %-*d  ", w->label_w, label, w->rep_w, replicate,
          seed, best, w->iter_w, res->stop.iterations);
-  // No note for a run that used its whole budget
-  if (res->stop.reason == STOP_ITERATIONS) printf("%s\n", evals);
-  else printf("%-16s  %s\n", evals, enum_name(stop_reason_table, res->stop.reason));
+  printf("%-16s  %s\n", evals, enum_name(stop_reason_table, res->stop.reason));
 }

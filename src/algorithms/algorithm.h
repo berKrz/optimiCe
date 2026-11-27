@@ -12,6 +12,9 @@ typedef struct FitnessEntry FitnessEntry;  // opaque: defined in fitness.c
 
 typedef enum { MINIMIZE, MAXIMIZE } OptDirection;
 
+// The cap that paces schedules; the other cap, when set, only stops a run early
+typedef enum { BUDGET_ITERATIONS, BUDGET_EVALUATIONS } Budget;
+
 // The config every algorithm shares. An algorithm's own parameters live in a `_Thread_local cfg`
 // private to its file
 // seed and replicates are batch-wide, but sit here because the field tables write through this
@@ -25,7 +28,9 @@ typedef struct {
   double       domain_max;
   double       init_min;        // range the initial population is drawn from, inside the domain
   double       init_max;        // NaN until validate resolves an unset end to the domain's
-  int          iterations;      // hard cap on every run
+  Budget       budget;          // the cap that paces schedules
+  int          iterations;      // iteration cap; 0 = off unless it's the budget
+  int          evaluations;     // evaluation cap; 0 = off unless it's the budget
   double       target_fitness;  // stop once the best reaches it; NaN = off
   int          stagnation;      // stop after this many iterations without improving; 0 = off
 
@@ -120,7 +125,13 @@ int      rng_next_bit(void);
 // --- Stopping and the result ---
 
 // Why a run stopped; STOP_PENDING while it's still running, never once it has finished
-typedef enum { STOP_PENDING, STOP_TARGET, STOP_STAGNATION, STOP_ITERATIONS } StopReason;
+typedef enum {
+  STOP_PENDING,
+  STOP_TARGET,
+  STOP_STAGNATION,
+  STOP_ITERATIONS,
+  STOP_EVALUATIONS
+} StopReason;
 
 typedef struct {
   double     best;        // best fitness seen by end_iteration over the whole run
@@ -281,5 +292,5 @@ typedef struct Algorithm {
 // The budget belongs to the runner: an algorithm leaves its loop through end_iteration and paces
 // its schedules through progress, never reading the caps or the counters itself
 #ifdef OPTIMICE_ALGORITHM_FILE
-#pragma GCC poison iterations evaluations
+#pragma GCC poison budget iterations evaluations
 #endif

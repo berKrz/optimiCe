@@ -44,6 +44,8 @@ expect_ok
 
 begin "--interactive with two runs"
 config <<'TOML'
+[common]
+iterations = 5
 [[run]]
 algorithm = "pso"
 [[run]]
@@ -55,6 +57,7 @@ expect_error "Error: --interactive needs a single job (got 2 runs x 1 replicate 
 begin "--interactive with two replicates"
 config <<'TOML'
 [common]
+iterations = 5
 replicates = 2
 [[run]]
 algorithm = "pso"

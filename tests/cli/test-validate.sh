@@ -61,10 +61,30 @@ one_run pso "$(printf 'init_min = -5.0\ninit_max = 5.0')"
 check
 expect_dump init_min -5
 
-begin "iterations below 1"
+begin "negative iterations"
+one_run pso 'iterations = -1'
+check
+expect_error "Error at 'case.toml [[run]] pso-1': iterations must be non-negative (0 disables it)"
+
+begin "negative evaluations"
+one_run pso 'evaluations = -1'
+check
+expect_error "Error at 'case.toml [[run]] pso-1': evaluations must be non-negative (0 disables it)"
+
+begin "iteration budget of 0"
 one_run pso 'iterations = 0'
 check
-expect_error "Error at 'case.toml [[run]] pso-1': iterations must be positive"
+expect_error "Error at 'case.toml [[run]] pso-1': budget is \"iterations\", so iterations must be positive"
+
+begin "evaluation budget of 0"
+one_run pso 'budget = "evaluations"'
+check
+expect_error "Error at 'case.toml [[run]] pso-1': budget is \"evaluations\", so evaluations must be positive"
+
+begin "iterations off under an evaluation budget"
+one_run pso "$(printf 'budget = "evaluations"\nevaluations = 100\niterations = 0')"
+check
+expect_dump iterations 0
 
 begin "iterations of 1"
 one_run pso 'iterations = 1'

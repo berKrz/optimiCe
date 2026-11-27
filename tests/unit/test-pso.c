@@ -58,6 +58,15 @@ Test(pso, inertia_single_iteration) {
   cr_expect(eq(dbl, inertia(1.0, 1.0), 0.9));
 }
 
+// Measured from the first iteration's progress, however far setup got: under an evaluation budget
+// setup's evaluations count, so the first iteration's progress is above 0
+Test(pso, inertia_rescaled_from_first_progress) {
+  PARAM("w")     = 0.9;
+  PARAM("w_end") = 0.4;
+  cr_expect(eq(dbl, inertia(0.1, 0.1), 0.9));
+  cr_expect(epsilon_eq(dbl, inertia(0.55, 0.1), 0.65, 1e-15));
+}
+
 // Constant inertia stays bit-identical to w
 Test(pso, inertia_constant) {
   PARAM("w")     = 0.7;
@@ -91,6 +100,7 @@ Test(pso, velocity_cap_off) {
 // An unset w_end is w: constant inertia
 Test(pso, w_end_resolves_to_w) {
   Batch b = load_toml(
+      "[common]\niterations = 5\n"
       "[[run]]\nalgorithm = \"pso\"\nw = 0.7\n"
       "[[run]]\nalgorithm = \"pso\"\nw = 0.7\nw_end = 0.4\n");
   cr_expect(eq(dbl, *(double*) algo_field(&b.runs[0], "w_end"), 0.7));

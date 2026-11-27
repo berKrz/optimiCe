@@ -58,6 +58,23 @@ static void check_run(const Algorithm* algo, const char* extra) {
   free_batch(&b);
 }
 
+// --- Evaluation budget ---
+
+// With no other cap, every algorithm stops on the budget, having made at least its evaluations
+Test(algorithms, evaluation_budget) {
+  const char* extra = "budget = \"evaluations\"\nevaluations = 300\niterations = 0\n";
+  for (int a = 0; algorithms[a]; a++) {
+    check_run(algorithms[a], extra);
+    Batch     b   = load_run_of(algorithms[a], extra);
+    RunResult res = run_job_of(&b, 0);
+    cr_expect(eq(int, res.stop.reason, STOP_EVALUATIONS), "%s: stop reason", algorithms[a]->name);
+    cr_expect(res.evaluations >= 300, "%s: %" PRIu64 " evaluations, under the budget",
+              algorithms[a]->name, res.evaluations);
+    free(res.pos);
+    free_batch(&b);
+  }
+}
+
 // --- Every combination of every algorithm's enum fields ---
 
 Test(algorithms, every_enum_combination) {

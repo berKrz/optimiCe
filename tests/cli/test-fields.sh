@@ -3,32 +3,32 @@
 # shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
-# A [common] section holding $1, then one pso run
+# A [common] section holding $1 and an iteration budget of 5, then one pso run
 common() {
-  printf '[common]\n%s\n[[run]]\nalgorithm = "pso"\n' "$1" | config
+  printf '[common]\niterations = 5\n%s\n[[run]]\nalgorithm = "pso"\n' "$1" | config
 }
 
-# --- int (iterations, stagnation) ---
+# --- int (stagnation) ---
 
 begin "int given a string"
-common 'iterations = "10"'
+common 'stagnation = "10"'
 run -d -f case.toml
-expect_error "Error at 'case.toml [common]' [iterations]: expected integer"
+expect_error "Error at 'case.toml [common]' [stagnation]: expected integer"
 
 begin "int given a float"
-common 'iterations = 2.0'
+common 'stagnation = 2.0'
 run -d -f case.toml
-expect_error "Error at 'case.toml [common]' [iterations]: expected integer"
+expect_error "Error at 'case.toml [common]' [stagnation]: expected integer"
 
 begin "int above INT_MAX"
-common 'iterations = 2147483648'
+common 'stagnation = 2147483648'
 run -d -f case.toml
-expect_error "Error at 'case.toml [common]' [iterations]: out of int range"
+expect_error "Error at 'case.toml [common]' [stagnation]: out of int range"
 
 begin "int at INT_MAX"
-common 'iterations = 2147483647'
+common 'stagnation = 2147483647'
 run -d -f case.toml
-expect_dump iterations 2147483647
+expect_dump stagnation 2147483647
 
 begin "int below INT_MIN"
 common 'stagnation = -2147483649'
@@ -102,7 +102,7 @@ expect_error "Error at 'case.toml [common]' [fitness]: expected string"
 
 # A ga run with crossover $1 and cut_points = $2
 ga_cuts() {
-  printf '[[run]]\nalgorithm = "ga"\ncrossover = "%s"\ncut_points = %s\n' "$1" "$2" | config
+  printf '[[run]]\nalgorithm = "ga"\niterations = 5\ncrossover = "%s"\ncut_points = %s\n' "$1" "$2" | config
 }
 
 # n evenly spaced values in (0, 1), as a TOML array: [0.01, 0.02, ...]
