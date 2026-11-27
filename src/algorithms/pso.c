@@ -98,7 +98,9 @@ typedef struct {
   double*   data;       // the buffer the particles point into
   double*   gbest_pos;  // n_dims; always some particle's pbest
   double    gbest_fitness;
-  double    v_cap;  // largest velocity component allowed; 0 when there's no cap
+  double    v_cap;           // largest velocity component allowed; 0 when there's no cap
+  double    first_progress;  // run progress at the first iteration, where inertia is w;
+                             // set by pso_run once the stop state exists
 } Swarm;
 
 static Swarm swarm_alloc(void) {
@@ -172,13 +174,17 @@ static void init_swarm(Swarm* swarm) {
   for (int i = 1; i < cfg.swarm_size; i++) update_gbest(swarm, &swarm->particles[i]);
 }
 
-// Inertia for iteration `iter` (0-based): linear from w at the first iteration to w_end at the
-// last
-// With w_end == w the difference is exactly 0, so constant inertia stays bit-identical to w
-UNITTEST double inertia(int iter);
-UNITTEST double inertia(int iter) {
-  double frac = g_cfg.iterations > 1 ? (double) iter / (g_cfg.iterations - 1) : 0.0;
-  return cfg.w + (cfg.w_end - cfg.w) * frac;
+// Inertia at `run_progress`: linear from w at the first iteration to w_end at progress 1
+// Measured from the first iteration's progress rather than from 0, so the first iteration gets
+// exactly w; a run whose first iteration is also its last gets w
+// Interpolated from whichever end is nearer, so both ends are exact; with w_end == w the
+// difference is exactly 0, so constant inertia stays w
+UNITTEST double inertia(double run_progress, double first_progress);
+UNITTEST double inertia(double run_progress, double first_progress) {
+  double frac =
+      first_progress < 1.0 ? (run_progress - first_progress) / (1.0 - first_progress) : 0.0;
+  double diff = cfg.w_end - cfg.w;
+  return frac < 0.5 ? cfg.w + diff * frac : cfg.w_end - diff * (1.0 - frac);
 }
 
 static void update_swarm(Swarm* swarm, double w) {
@@ -263,13 +269,14 @@ static void pso_run(RunResult* out) {
     show_swarm(&swarm);
   }
 
-  StopState stop = stop_init();
-  for (int i = 0; i < g_cfg.iterations; i++) {
-    double w = inertia(i);
+  StopState stop       = stop_init();
+  swarm.first_progress = progress(&stop);
+  for (;;) {
+    double w = inertia(progress(&stop), swarm.first_progress);
     update_swarm(&swarm, w);
 
     if (g_opts.interactive) {
-      print_iteration_header(i);
+      print_iteration_header(&stop);
       if (cfg.w_end != cfg.w) printf("w = %g\n\n", w);
       show_swarm(&swarm);
     }

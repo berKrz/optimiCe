@@ -17,9 +17,9 @@ void print_separator(void) {
   printf("\n\n");
 }
 
-void print_iteration_header(int iter) {
+void print_iteration_header(const StopState* st) {
   char buf[32];
-  int  n = snprintf(buf, sizeof(buf), "=== Iteration %d ", iter);
+  int  n = snprintf(buf, sizeof(buf), "=== Iteration %d ", st->iterations);
   printf("%s", buf);
   for (int i = n; i < LINE_WIDTH; i++) printf("=");
   printf("\n\n");
@@ -51,13 +51,26 @@ void print_result(const RunResult* r) {
   fmt_exact(fit, r->fitness);
   printf("   fitness = %s\n\n", fit);
 
-  if (r->stop.reason == STOP_TARGET)
+  StopReason why = r->stop.reason;
+  if (why == STOP_TARGET)
     printf("Stopped early: target fitness %g reached\n\n", g_cfg.target_fitness);
-  else if (r->stop.reason == STOP_STAGNATION)
+  else if (why == STOP_STAGNATION)
     printf("Stopped early: no improvement for %d iterations\n\n", g_cfg.stagnation);
+  else if (why == STOP_ITERATIONS && g_cfg.budget == BUDGET_ITERATIONS)
+    printf("Stopped: iteration budget of %d reached\n\n", g_cfg.iterations);
+  else if (why == STOP_ITERATIONS)
+    printf("Stopped early: iteration cap of %d reached\n\n", g_cfg.iterations);
+  else if (why == STOP_EVALUATIONS && g_cfg.budget == BUDGET_EVALUATIONS)
+    printf("Stopped: evaluation budget of %d reached\n\n", g_cfg.evaluations);
+  else if (why == STOP_EVALUATIONS)
+    printf("Stopped early: evaluation cap of %d reached\n\n", g_cfg.evaluations);
 
   printf("Iterations: %d\n", r->stop.iterations);
-  printf("Evaluations: %" PRIu64 "\n", r->evaluations);
+  printf("Evaluations: %" PRIu64, r->evaluations);
+  if (r->skipped > 0)
+    printf(" (%" PRIu64 " skipped: the %s ran out mid-iteration)", r->skipped,
+           g_cfg.budget == BUDGET_EVALUATIONS ? "budget" : "evaluation cap");
+  printf("\n");
   printf("Algorithm: %s    Seed: 0x%08x\n", g_cfg.algorithm->name, g_cfg.seed);
   for (int i = 0; i < LINE_WIDTH; i++) printf("=");
   printf("\n");
@@ -108,9 +121,5 @@ void print_job_line(const JobLineWidths* w, const char* label, int replicate, ui
   // best is padded to its longest form, "best = " and 24 characters: -1.2345678901234567e-308
   printf("%-*s  r%-*d  seed 0x%08x  %-31s  iters %-*d  ", w->label_w, label, w->rep_w, replicate,
          seed, best, w->iter_w, res->stop.iterations);
-  switch (res->stop.reason) {
-    case STOP_NONE:       printf("%s\n", evals); break;
-    case STOP_TARGET:     printf("%-16s  target\n", evals); break;
-    case STOP_STAGNATION: printf("%-16s  stagnation\n", evals); break;
-  }
+  printf("%-16s  %s\n", evals, enum_name(stop_reason_table, res->stop.reason));
 }

@@ -121,6 +121,7 @@ expect_error "Error at 'case.toml [common]' [replicates]: must be at least 1"
 begin "replicates of 1"
 config <<'TOML'
 [common]
+iterations = 5
 replicates = 1
 [[run]]
 algorithm = "pso"
@@ -143,6 +144,7 @@ expect_error "Error at 'case.toml [common]' [replicates]: too many jobs (runs x 
 begin "as many jobs as fit"
 config <<'TOML'
 [common]
+iterations = 5
 replicates = 2147483647
 [[run]]
 algorithm = "pso"

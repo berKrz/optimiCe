@@ -94,6 +94,8 @@ Best solution:
    pos: [  -0.000  -0.000 ]
    fitness = 7.872174776306589e-11
 
+Stopped: iteration budget of 100 reached
+
 Iterations: 100
 Evaluations: 3030
 Algorithm: pso    Seed: 0x0000002a

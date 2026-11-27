@@ -15,6 +15,18 @@ static const EnumEntry direction_table[] = {
     {NULL,       0       },
 };
 
+static const EnumEntry budget_table[] = {
+    {"iterations",  BUDGET_ITERATIONS },
+    {"evaluations", BUDGET_EVALUATIONS},
+    {NULL,          0                 },
+};
+
+static const EnumEntry cutoff_table[] = {
+    {"exact",     CUTOFF_EXACT    },
+    {"iteration", CUTOFF_ITERATION},
+    {NULL,        0               },
+};
+
 // --- Runner field table ---
 
 // Row order is --help order: [common]-only fields first, [[run]]-only last
@@ -27,8 +39,15 @@ const FieldSpec runner_fields[] = {
               "Optimization direction"),
     FIELD_ROW(Config, n_dims, INT, SCOPE_GLOBAL, NULL, "2",
               "Number of dimensions of the search space"),
-    FIELD_ROW(Config, iterations, INT, SCOPE_GLOBAL, NULL, "100",
-              "Iteration budget, the hard cap on every run (generations, for GA)"),
+    FIELD_ROW(Config, budget, ENUM, SCOPE_GLOBAL, budget_table, "iterations",
+              "Which cap paces schedules; the other, when set, only stops a run early"),
+    FIELD_ROW(Config, iterations, INT, SCOPE_GLOBAL, NULL, "0",
+              "Iteration cap (generations, for GA); 0 = off, unless it's the budget"),
+    FIELD_ROW(Config, evaluations, INT, SCOPE_GLOBAL, NULL, "0",
+              "Fitness evaluation cap; 0 = off, unless it's the budget"),
+    FIELD_ROW(Config, evaluation_cutoff, ENUM, SCOPE_GLOBAL, cutoff_table, "exact",
+              "How the evaluation cap ends its last iteration: skip the evaluations past it, or "
+              "finish the iteration"),
     FIELD_ROW(Config, target_fitness, DOUBLE, SCOPE_GLOBAL, NULL, "nan",
               "Stop early once the best is at least this good"),
     FIELD_ROW(Config, stagnation, INT, SCOPE_GLOBAL, NULL, "0",
@@ -81,7 +100,12 @@ void validate(void) {
   if (g_cfg.init_min < g_cfg.domain_min || g_cfg.init_max > g_cfg.domain_max)
     die_with_hint("the init range must be inside the domain");
 
-  if (g_cfg.iterations < 1) die_with_hint("iterations must be positive");
+  if (g_cfg.iterations < 0) die_with_hint("iterations must be non-negative (0 disables it)");
+  if (g_cfg.evaluations < 0) die_with_hint("evaluations must be non-negative (0 disables it)");
+  if (g_cfg.budget == BUDGET_ITERATIONS && g_cfg.iterations == 0)
+    die_with_hint("budget is \"iterations\", so iterations must be positive");
+  if (g_cfg.budget == BUDGET_EVALUATIONS && g_cfg.evaluations == 0)
+    die_with_hint("budget is \"evaluations\", so evaluations must be positive");
   if (g_cfg.stagnation < 0) die_with_hint("stagnation must be non-negative (0 disables it)");
 
   fitness_check();  // g_cfg.fitness is set: set_field resolved it, or the default did

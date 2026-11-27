@@ -18,15 +18,26 @@ struct FitnessEntry {
 
 // --- Counted evaluation ---
 
-static _Thread_local uint64_t count;
+static _Thread_local uint64_t count, skipped;
 
+// Under the exact cutoff, a call past the evaluation cap isn't made or counted: it gets the worst
+// fitness there is, so it never becomes the best
 double evaluate(const double* pos) {
+  if (g_cfg.evaluation_cutoff == CUTOFF_EXACT && g_cfg.evaluations > 0 &&
+      count >= (uint64_t) g_cfg.evaluations) {
+    skipped++;
+    return g_cfg.direction == MINIMIZE ? INFINITY : -INFINITY;
+  }
   count++;
   return g_cfg.fitness->fn(pos);
 }
 
-void     evaluations_reset(void) { count = 0; }
+void evaluations_reset(void) {
+  count   = 0;
+  skipped = 0;
+}
 uint64_t evaluations(void) { return count; }
+uint64_t evaluations_skipped(void) { return skipped; }
 
 // --- Functions ---
 

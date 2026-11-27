@@ -24,8 +24,9 @@ begin() {
 config() { cat > case.toml; }
 
 # Writes a config with one run of algorithm $1, plus the lines in $2 (several lines in one
-# argument) in that run; every other field keeps its default
-one_run() { printf '[[run]]\nalgorithm = "%s"\n%s\n' "$1" "$2" | config; }
+# argument) in that run; an iteration budget of 5 in [common], which the run may override, and
+# every other field at its default
+one_run() { printf '[common]\niterations = 5\n[[run]]\nalgorithm = "%s"\n%s\n' "$1" "$2" | config; }
 
 # Loads and validates the config, without running it
 check() { run -d -f case.toml; }

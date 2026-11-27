@@ -22,9 +22,11 @@ int find_algorithm(const char* name);
 
 // --- Fitness (fitness.c) ---
 
-// The calling thread's count of evaluate calls; reset before a run and read after it
+// The calling thread's count of evaluate calls, and of those skipped past the evaluation cap;
+// reset before a run and read after it
 void     evaluations_reset(void);
 uint64_t evaluations(void);
+uint64_t evaluations_skipped(void);
 
 // A catalog entry by its config name (NULL when there's none), and its name
 const FitnessEntry* fitness_find(const char* name);
@@ -39,6 +41,11 @@ const FitnessEntry* fitness_at(int i);
 void fitness_limits_text(const FitnessEntry* entry, char* dims, char* domain);
 // Prints the catalog for --list: one line per function, its name and its limits
 void fitness_print_catalog(void);
+
+// --- Stopping (stop.c) ---
+
+// A finished run's reason, by the name output uses
+extern const EnumEntry stop_reason_table[];
 
 // --- Random numbers (rng.c) ---
 

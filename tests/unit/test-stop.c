@@ -4,11 +4,23 @@
 
 #include "unittest.h"
 
-// Minimizing, with both stopping rules off
+// Minimizing, with both early stops off, an iteration budget no test reaches, no evaluation cap,
+// and a 1-dimensional sphere for the tests that evaluate
 static void setup(void) {
   g_cfg_rw.direction      = MINIMIZE;
   g_cfg_rw.target_fitness = NAN;
   g_cfg_rw.stagnation     = 0;
+  g_cfg_rw.budget         = BUDGET_ITERATIONS;
+  g_cfg_rw.iterations     = 1000000;
+  g_cfg_rw.evaluations    = 0;
+  g_cfg_rw.fitness        = fitness_find("sphere");
+  g_cfg_rw.n_dims         = 1;
+}
+
+// Makes `n` evaluations, which count toward the evaluation cap
+static void evaluate_times(int n) {
+  double x = 1.0;
+  for (int i = 0; i < n; i++) evaluate(&x);
 }
 
 TestSuite(stop, .init = setup);
@@ -32,7 +44,7 @@ Test(stop, improvement_and_stale) {
   expect_state(&st, 5.0, 2, 3);
   end_iteration(&st, 4.0);
   expect_state(&st, 4.0, 0, 4);
-  cr_expect(eq(int, st.reason, STOP_NONE));
+  cr_expect(eq(int, st.reason, STOP_PENDING));
 }
 
 Test(stop, improvement_and_stale_maximizing) {
@@ -96,7 +108,7 @@ Test(stop, nan_target_is_off) {
   StopState st = stop_init();
   for (int i = 0; i < 100; i++)
     cr_assert(eq(int, end_iteration(&st, -1e6 * i), 0), "stopped at iteration %d", i);
-  cr_expect(eq(int, st.reason, STOP_NONE));
+  cr_expect(eq(int, st.reason, STOP_PENDING));
 }
 
 // --- Stagnation ---
@@ -130,4 +142,104 @@ Test(stop, zero_stagnation_is_off) {
   for (int i = 0; i < 1000; i++)
     cr_assert(eq(int, end_iteration(&st, 5.0), 0), "stopped at iteration %d", i);
   cr_expect(eq(int, st.stale, 999));
+}
+
+// --- Iteration cap ---
+
+// Stops once the cap's iterations are done, not before
+Test(stop, iterations_cap) {
+  g_cfg_rw.iterations = 3;
+  StopState st        = stop_init();
+  cr_expect(eq(int, end_iteration(&st, 5.0), 0));
+  cr_expect(eq(int, end_iteration(&st, 5.0), 0));
+  cr_expect(eq(int, end_iteration(&st, 5.0), 1));
+  cr_expect(eq(int, st.reason, STOP_ITERATIONS));
+  cr_expect(eq(int, st.iterations, 3));
+}
+
+// An early stop on the last iteration is the reason, not the cap
+Test(stop, target_wins_on_last_iteration) {
+  g_cfg_rw.iterations     = 2;
+  g_cfg_rw.target_fitness = 1.0;
+  StopState st            = stop_init();
+  end_iteration(&st, 5.0);
+  cr_expect(eq(int, end_iteration(&st, 1.0), 1));
+  cr_expect(eq(int, st.reason, STOP_TARGET));
+}
+
+Test(stop, stagnation_wins_on_last_iteration) {
+  g_cfg_rw.iterations = 2;
+  g_cfg_rw.stagnation = 1;
+  StopState st        = stop_init();
+  end_iteration(&st, 5.0);
+  cr_expect(eq(int, end_iteration(&st, 5.0), 1));
+  cr_expect(eq(int, st.reason, STOP_STAGNATION));
+}
+
+// --- Evaluation cap ---
+
+// Under an evaluation budget, stops once the budget's evaluations are made, not before
+Test(stop, evaluations_budget) {
+  g_cfg_rw.budget      = BUDGET_EVALUATIONS;
+  g_cfg_rw.iterations  = 0;
+  g_cfg_rw.evaluations = 10;
+  StopState st         = stop_init();
+  evaluate_times(9);
+  cr_expect(eq(int, end_iteration(&st, 5.0), 0));
+  evaluate_times(1);
+  cr_expect(eq(int, end_iteration(&st, 5.0), 1));
+  cr_expect(eq(int, st.reason, STOP_EVALUATIONS));
+}
+
+// The cap that isn't the budget stops a run early, either way round
+Test(stop, evaluations_cap_stops_early) {
+  g_cfg_rw.evaluations = 10;
+  StopState st         = stop_init();
+  evaluate_times(10);
+  cr_expect(eq(int, end_iteration(&st, 5.0), 1));
+  cr_expect(eq(int, st.reason, STOP_EVALUATIONS));
+}
+
+Test(stop, iterations_cap_stops_early) {
+  g_cfg_rw.budget      = BUDGET_EVALUATIONS;
+  g_cfg_rw.evaluations = 1000;
+  g_cfg_rw.iterations  = 2;
+  StopState st         = stop_init();
+  end_iteration(&st, 5.0);
+  cr_expect(eq(int, end_iteration(&st, 5.0), 1));
+  cr_expect(eq(int, st.reason, STOP_ITERATIONS));
+}
+
+// --- Progress ---
+
+// The current iteration counts as underway: 1/4 on the first of 4, exactly 1 on the last
+Test(stop, progress_counts_current_iteration) {
+  g_cfg_rw.iterations = 4;
+  StopState st        = stop_init();
+  cr_expect(eq(dbl, progress(&st), 0.25));
+  end_iteration(&st, 5.0);
+  cr_expect(eq(dbl, progress(&st), 0.5));
+  end_iteration(&st, 5.0);
+  end_iteration(&st, 5.0);
+  cr_expect(eq(dbl, progress(&st), 1.0));
+}
+
+// Under an evaluation budget: the fraction of it used so far
+Test(stop, progress_counts_evaluations) {
+  g_cfg_rw.budget      = BUDGET_EVALUATIONS;
+  g_cfg_rw.evaluations = 40;
+  StopState st         = stop_init();
+  evaluate_times(10);
+  cr_expect(eq(dbl, progress(&st), 0.25));
+  evaluate_times(10);
+  cr_expect(eq(dbl, progress(&st), 0.5));
+}
+
+// Setup alone over the budget: still at most 1
+Test(stop, progress_capped_at_one) {
+  g_cfg_rw.budget      = BUDGET_EVALUATIONS;
+  g_cfg_rw.evaluations = 10;
+  evaluate_times(30);
+  StopState st = stop_init();
+  cr_expect(eq(dbl, progress(&st), 1.0));
 }

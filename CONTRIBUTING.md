@@ -106,10 +106,11 @@ What every algorithm must do:
 - **Check its config in `validate`,** with `die_with_hint` for every invalid value. With a `bounds` field, call `check_bounds_mode`; for buffers sized from the config, `check_fits_int`.
 - **Evaluate only through `evaluate`, and every candidate exactly once:** keep the fitness of what has been evaluated, and never evaluate again to compare or to print. The count is the run's reported cost.
 - **Draw randomness only from the RNG functions,** never `rand()` or another source: they're what make a job reproducible from its seed.
-- **Call `end_iteration` once at the end of every iteration** with the current best fitness, and leave the loop when it returns 1. It handles progress lines and early stopping.
+- **Loop with `for (;;)` and call `end_iteration` once at the end of every iteration** with the current best fitness, leaving the loop when it returns 1. It handles progress lines and every stopping rule; the budget's caps and counters are off limits (algorithm files can't even name `budget`, `iterations`, `evaluations` or `evaluation_cutoff`, which are poisoned there).
+- **Pace any schedule with `progress`,** the share of the run's budget used, read before the iteration's moves. It's in (0, 1], so it's never 0 on the first iteration; a schedule that must start exactly at its initial value measures from the first iteration's progress, as PSO's inertia does.
 - **Fill in the result:** the best fitness, its position in `out->pos`, which holds `n_dims` values, and the `StopState`.
 - **Print only under `--interactive`,** using the shared helpers in `algorithm.h`, and end each view of the population with a legend for its markers.
-- **Keep larger state in a struct** with allocation and free functions, like PSO's `Swarm`, and use `i` for the iteration loop's variable.
+- **Keep larger state in a struct** with allocation and free functions, like PSO's `Swarm`.
 
 ### The doc
 

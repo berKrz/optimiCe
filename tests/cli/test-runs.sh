@@ -103,12 +103,103 @@ algorithm = "ga"
 TOML
 progress_case 6
 
+# --- Stop reasons ---
+
+# Every job line ends with why its run stopped, and the CSV agrees; an evaluation-budget run makes
+# at least its budget's evaluations
+begin "job lines end with their stop reason"
+config <<'TOML'
+[common]
+replicates = 2
+iterations = 5
+[[run]]
+algorithm = "sma"
+[[run]]
+algorithm = "pso"
+budget = "evaluations"
+evaluations = 100
+iterations = 0
+TOML
+run -f case.toml -o out.csv
+printf '%s\n' iterations iterations evaluations evaluations > "$tmp/expected"
+awk '$2 ~ /^r[0-9]+$/ { print $NF }' "$out" > "$tmp/got"
+short=$(grep '^pso-1,' out.csv | awk -F, '$6 < 100 || $7 != "evaluations"')
+if [ "$status" -ne 0 ]; then
+  { echo "exit status $status, expected 0"; cat "$err"; } | fail
+elif ! diff "$tmp/expected" "$tmp/got" > "$tmp/diff"; then
+  fail < "$tmp/diff"
+elif [ -n "$short" ]; then
+  { echo "pso rows not stopped by the evaluation budget:"; echo "$short"; } | fail
+else
+  pass
+fi
+
+# The single-job footer says which cap stopped the run, and whether that was the budget
+footer_case() {
+  run -f case.toml
+  got=$(grep '^Stopped' "$out")
+  if [ "$status" -ne 0 ]; then
+    { echo "exit status $status, expected 0"; cat "$err"; } | fail
+  elif [ "$got" != "$1" ]; then
+    echo "expected '$1', got '$got'" | fail
+  else
+    pass
+  fi
+}
+
+begin "footer: iteration budget reached"
+one_run sma ''
+footer_case "Stopped: iteration budget of 5 reached"
+
+begin "footer: evaluation budget reached"
+one_run sma "$(printf 'budget = "evaluations"\nevaluations = 100\niterations = 0')"
+footer_case "Stopped: evaluation budget of 100 reached"
+
+begin "footer: iteration cap before an evaluation budget"
+one_run sma "$(printf 'budget = "evaluations"\nevaluations = 100000\niterations = 3')"
+footer_case "Stopped early: iteration cap of 3 reached"
+
+begin "footer: evaluation cap before an iteration budget"
+one_run sma "$(printf 'iterations = 1000\nevaluations = 100')"
+footer_case "Stopped early: evaluation cap of 100 reached"
+
+# The exact cutoff's skipped evaluations show on the footer's evaluations line, and only when
+# there are any: sma's 30 slimes evaluate 30 per iteration, setup included
+skipped_case() {
+  run -f case.toml
+  got=$(grep '^Evaluations' "$out")
+  if [ "$status" -ne 0 ]; then
+    { echo "exit status $status, expected 0"; cat "$err"; } | fail
+  elif [ "$got" != "$1" ]; then
+    echo "expected '$1', got '$got'" | fail
+  else
+    pass
+  fi
+}
+
+begin "footer: evaluations skipped mid-iteration"
+one_run sma "$(printf 'budget = "evaluations"\nevaluations = 100\niterations = 0\npop_size = 30')"
+skipped_case "Evaluations: 100 (20 skipped: the budget ran out mid-iteration)"
+
+begin "footer: evaluation cap skipping before an iteration budget"
+one_run sma "$(printf 'iterations = 1000\nevaluations = 100\npop_size = 30')"
+skipped_case "Evaluations: 100 (20 skipped: the evaluation cap ran out mid-iteration)"
+
+begin "footer: no skipped note when the budget divides evenly"
+one_run sma "$(printf 'budget = "evaluations"\nevaluations = 90\niterations = 0\npop_size = 30')"
+skipped_case "Evaluations: 90"
+
+begin "footer: no skipped note under the iteration cutoff"
+one_run sma "$(printf 'budget = "evaluations"\nevaluations = 100\niterations = 0\npop_size = 30\nevaluation_cutoff = "iteration"')"
+skipped_case "Evaluations: 120"
+
 # --- --dump-config ---
 
 begin "generated seed marked as such"
 config <<'TOML'
 [[run]]
 algorithm = "pso"
+iterations = 5
 TOML
 run -d -f case.toml
 if [ "$status" -ne 0 ]; then
@@ -123,6 +214,7 @@ begin "given seed not marked"
 config <<'TOML'
 [common]
 seed = 42
+iterations = 5
 [[run]]
 algorithm = "pso"
 TOML

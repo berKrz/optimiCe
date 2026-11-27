@@ -30,12 +30,14 @@ An algorithm file includes only `algorithm.h`, and the build treats calling an u
 - `evaluate`, the only way to reach the fitness function;
 - `is_better`, the run's direction as a comparison;
 - the random number functions;
-- `end_iteration`, which handles progress output and the early stops;
+- `end_iteration`, which handles progress output and every stopping rule, and `progress`, the share of the run's budget used, which schedules follow;
 - ranking, boundary handling and the shared pieces of the interactive view;
 - the field-table macros an algorithm declares its parameters with;
 - the error and allocation helpers.
 
 What only the runner may do lives in `core.h`, out of an algorithm's reach: seeding the RNG, resetting the evaluation counter, finding algorithms in the registry, running a batch.
+
+The budget is the runner's too. `algorithm.h` ends with `#pragma GCC poison budget iterations evaluations evaluation_cutoff`, active only in algorithm files, so an algorithm can't read the caps, the iteration count or the evaluation counter, not even through a local variable of the same name: it stops through `end_iteration` and paces its schedules through `progress`. The pragma must stay last in the header, after every declaration that uses those names.
 
 The fitness catalog is also closed: `FitnessEntry` is opaque outside `fitness.c`, so no file can reach a function pointer and call a fitness function without going through `evaluate`.
 
@@ -84,7 +86,7 @@ An algorithm is a `const Algorithm` value:
 - `validate`: checks its config, dying on the first problem, and may resolve derived values.
 - `run`: runs one job, filling in the best fitness, its position and how the run ended.
 
-A run evaluates through `evaluate`, draws random numbers through the RNG functions, and calls `end_iteration` once per iteration with its current best. It prints nothing except under `--interactive`.
+A run evaluates through `evaluate`, draws random numbers through the RNG functions, and calls `end_iteration` once per iteration with its current best, leaving its loop when that returns 1. A schedule reads `progress`: under an iteration budget, `(i + 1) / iterations` for iteration `i`, reaching exactly 1 on the last one; under an evaluation budget, the share of evaluations used so far, at most 1. A run prints nothing except under `--interactive`.
 
 There is no list of algorithms to maintain. The Makefile lists `src/algorithms/*.c`, and for each file `<name>.c` it expects a `<name>_algorithm` value. From those names it generates `build/registry.h`, which declares every algorithm and defines `algorithms[]`, sorted alphabetically. Adding a file adds an algorithm.
 
@@ -116,7 +118,7 @@ Replicate `r` of every run uses the same seed, `seed + r`: the common random num
 
 ## Fitness evaluation
 
-`evaluate` is the only way to reach a fitness function, and every call increments the thread's evaluation counter. The runner resets the counter before each job and reads it after; an algorithm can do neither, since both live in `core.h`. Algorithms keep the fitness of what they have evaluated and never evaluate a solution twice, so the count is the run's real cost. See [Fitness functions](fitness.md#evaluations).
+`evaluate` is the only way to reach a fitness function, and every call increments the thread's evaluation counter. Under the exact cutoff, once the evaluation cap is spent, a call returns the worst fitness without reaching the function, and increments a second counter of skipped calls instead. The runner resets both before each job and reads them after; an algorithm can do neither, since both live in `core.h`. Algorithms keep the fitness of what they have evaluated and never evaluate a solution twice, so the count is the run's real cost. See [Fitness functions](fitness.md#evaluations).
 
 ## Errors
 
@@ -131,7 +133,7 @@ Everything that can be checked is checked while loading, so failures during a ba
 
 ## Output
 
-`io/report.c` prints to the terminal; `io/output.c` writes the results file. The file's header records the commit the binary was built from, which the Makefile writes into `build/version.h` from `git describe`, and the config file's POSIX `cksum`, so a results file can be traced back to the code and configuration that produced it. Rows are written by the printer, in job order, and flushed one by one. Final values are printed in the shortest form that reads back exactly, so printed results identify the doubles the run produced.
+`io/report.c` prints to the terminal; `io/output.c` writes the results file. The file's header records the commit the binary was built from, which the Makefile writes into `build/version.h` from `git describe`, and the config file's POSIX `cksum`, so a results file can be traced back to the code and configuration that produced it. Rows are written by the printer, in job order, and flushed one by one. Final values are printed in the shortest form that reads back exactly, so printed results identify the doubles the run produced. Stop reasons are named through `stop_reason_table` and `enum_name`, like every other enum, so the terminal and the file use the same names.
 
 ## Tests
 

@@ -38,11 +38,15 @@ $$x_{i,d} \leftarrow x_{i,d} + v_{i,d}$$
 
 With `w_end` set, the inertia changes linearly from `w` at the first iteration to `w_end` at the last. A decreasing schedule moves the swarm from exploration toward exploitation over the run: `w = 0.9` decaying to `w_end = 0.4` is the classic setting (Shi & Eberhart, 1999). `w_end` above `w` gives an increasing schedule instead, which some studies found converges faster (Zheng et al., 2003). Leaving `w_end` unset keeps the inertia constant at `w`.
 
-The schedule follows the iteration budget, not the iterations actually run: a run that stops early never reaches `w_end`. With $T$ = `iterations`, iteration $t$ (counting from 0) uses
+The schedule follows the run's budget (see [Stopping](../configuration.md#stopping)), not the iterations actually run: a run that stops early never reaches `w_end`. It's measured from the first iteration, so the first iteration always uses exactly `w`. Under an iteration budget, with $T$ = `iterations`, iteration $t$ (counting from 0) uses
 
 $$w_t = w + (w_\text{end} - w) \, \frac{t}{T - 1}$$
 
-and a budget of a single iteration uses `w`.
+reaching exactly `w_end` on the last iteration, and a budget of a single iteration uses `w`. Under an evaluation budget, with $E$ the evaluations used when an iteration starts, $E_0$ those of setup, and $E_\text{max}$ = `evaluations`, the iteration uses
+
+$$w_E = w + (w_\text{end} - w) \, \frac{E - E_0}{E_\text{max} - E_0}$$
+
+so the inertia approaches `w_end`, falling short of it by one iteration's share of the budget.
 
 ### Velocity cap
 
@@ -60,7 +64,7 @@ The cap is applied after the velocity update and before the move. Without it, an
 ### pbest initialization
 
 - `position` (the default): a particle's pbest starts at its starting position.
-- `random`: a particle's pbest starts at a second, independent draw from the init range. That draw is evaluated, so it costs one extra fitness evaluation per particle.
+- `random`: a particle's pbest starts at a second, independent draw from the init range. That draw is evaluated, so it costs one extra fitness evaluation per particle, which an evaluation budget counts.
 
 ## Fields
 

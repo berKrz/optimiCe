@@ -140,4 +140,22 @@ else
   pass
 fi
 
+# A run that does all its iterations stops on the cap
+begin "stop of a full run"
+config <<'TOML'
+[common]
+iterations = 5
+[[run]]
+algorithm = "pso"
+TOML
+run -f case.toml -o out.csv
+got=$(tail -n +6 out.csv | cut -d, -f5,7)
+if [ "$status" -ne 0 ]; then
+  { echo "exit status $status, expected 0"; cat "$err"; } | fail
+elif [ "$got" != "5,iterations" ]; then
+  echo "iterations and stop: got '$got', expected '5,iterations'" | fail
+else
+  pass
+fi
+
 finish

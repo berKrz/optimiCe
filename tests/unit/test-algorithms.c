@@ -47,14 +47,54 @@ static void check_run(const Algorithm* algo, const char* extra) {
   for (int d = 0; d < N_DIMS; d++)
     cr_expect(first.pos[d] >= g_cfg.domain_min && first.pos[d] <= g_cfg.domain_max,
               "%s: pos[%d] = %g is outside the domain", what, d, first.pos[d]);
+  evaluations_reset();  // a spent evaluation cap would skip this one
   cr_expect(eq(dbl, evaluate(first.pos), first.fitness), "%s: fitness isn't the position's", what);
   cr_expect(first.stop.iterations <= ITERATIONS, "%s: over budget", what);
-  if (first.stop.reason == STOP_NONE)
+  cr_expect(ne(int, first.stop.reason, STOP_PENDING), "%s: finished with no reason", what);
+  if (first.stop.reason == STOP_ITERATIONS)
     cr_expect(eq(int, first.stop.iterations, ITERATIONS), "%s: stopped early, no reason", what);
 
   free(first.pos);
   free(second.pos);
   free_batch(&b);
+}
+
+// --- Evaluation budget ---
+
+#define BUDGET 300
+
+// The evaluations of one run of `algo` with `extra`; its stop reason must be `reason`
+static uint64_t evaluations_of(const Algorithm* algo, const char* extra, StopReason reason) {
+  Batch     b   = load_run_of(algo, extra);
+  RunResult res = run_job_of(&b, 0);
+  cr_expect(eq(int, res.stop.reason, reason), "%s with\n%s: stop reason", algo->name, extra);
+  free(res.pos);
+  free_batch(&b);
+  return res.evaluations;
+}
+
+// With no other cap, every algorithm stops on the budget. The exact cutoff makes exactly the
+// budget's evaluations; the iteration cutoff finishes the last iteration, so it makes at least the
+// budget and less than one iteration more. An iteration costs at most setup plus one iteration,
+// measured by a one-iteration run, so the bound needs no algorithm's population size
+Test(algorithms, evaluation_budget) {
+  char exact[256], iteration[256];
+  snprintf(exact, sizeof(exact), "budget = \"evaluations\"\nevaluations = %d\niterations = 0\n",
+           BUDGET);
+  snprintf(iteration, sizeof(iteration), "%.200sevaluation_cutoff = \"iteration\"\n", exact);
+  for (int a = 0; algorithms[a]; a++) {
+    const Algorithm* algo = algorithms[a];
+    check_run(algo, exact);
+    check_run(algo, iteration);
+
+    cr_expect(eq(u64, evaluations_of(algo, exact, STOP_EVALUATIONS), BUDGET), "%s: exact",
+              algo->name);
+
+    uint64_t one   = evaluations_of(algo, "iterations = 1\n", STOP_ITERATIONS);
+    uint64_t evals = evaluations_of(algo, iteration, STOP_EVALUATIONS);
+    cr_expect(evals >= BUDGET && evals < BUDGET + one,
+              "%s: %" PRIu64 " evaluations, %" PRIu64 " for one iteration", algo->name, evals, one);
+  }
 }
 
 // --- Every combination of every algorithm's enum fields ---

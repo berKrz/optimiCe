@@ -29,6 +29,7 @@ static int default_algo_int(const char* algo_name, const char* key) {
 // One counter per algorithm, in file order
 Test(load, labels) {
   Batch b = load_toml(
+      "[common]\niterations = 5\n"
       "[[run]]\nalgorithm = \"pso\"\n"
       "[[run]]\nalgorithm = \"pso\"\n"
       "[[run]]\nalgorithm = \"ga\"\n"
@@ -45,14 +46,14 @@ Test(load, labels) {
 // defaults, then [common], then the run's own value, which the next run doesn't see
 Test(load, runner_precedence) {
   Batch b = load_toml(
-      "[common]\nn_dims = 5\n"
+      "[common]\nn_dims = 5\niterations = 5\n"
       "[[run]]\nalgorithm = \"pso\"\n"
       "[[run]]\nalgorithm = \"pso\"\nn_dims = 7\n"
       "[[run]]\nalgorithm = \"pso\"\n");
   cr_expect(eq(int, b.runs[0].cfg.n_dims, 5));
   cr_expect(eq(int, b.runs[1].cfg.n_dims, 7));
   cr_expect(eq(int, b.runs[2].cfg.n_dims, 5));
-  cr_expect(eq(int, b.runs[0].cfg.iterations, runner_defaults().iterations));
+  cr_expect(eq(int, b.runs[0].cfg.stagnation, runner_defaults().stagnation));
   free_batch(&b);
 }
 
@@ -60,6 +61,7 @@ Test(load, runner_precedence) {
 // [defaults.ga] sets a key sma has too, and sma doesn't see it
 Test(load, algorithm_precedence) {
   Batch b = load_toml(
+      "[common]\niterations = 5\n"
       "[defaults.pso]\nswarm_size = 40\n"
       "[defaults.ga]\npop_size = 20\n"
       "[[run]]\nalgorithm = \"pso\"\n"
@@ -79,6 +81,7 @@ Test(load, algorithm_precedence) {
 // A [defaults.<algo>] block no run uses isn't read, so even an unknown key in it loads
 Test(load, unused_defaults_not_read) {
   Batch b = load_toml(
+      "[common]\niterations = 5\n"
       "[defaults.sma]\nno_such_key = 1\n"
       "[[run]]\nalgorithm = \"pso\"\n");
   cr_expect(eq(int, b.n_runs, 1));
@@ -89,7 +92,7 @@ Test(load, unused_defaults_not_read) {
 
 Test(load, given_seed) {
   Batch b = load_toml(
-      "[common]\nseed = 1234\nreplicates = 3\n"
+      "[common]\nseed = 1234\nreplicates = 3\niterations = 5\n"
       "[[run]]\nalgorithm = \"pso\"\n"
       "[[run]]\nalgorithm = \"ga\"\n");
   cr_expect(eq(u32, b.seed, 1234));
@@ -102,7 +105,7 @@ Test(load, given_seed) {
 // Omitted, a seed is generated, and every run has it as its base
 Test(load, generated_seed) {
   Batch b = load_toml(
-      "[common]\nn_dims = 3\n"
+      "[common]\nn_dims = 3\niterations = 5\n"
       "[[run]]\nalgorithm = \"pso\"\n"
       "[[run]]\nalgorithm = \"ga\"\n");
   cr_expect(eq(int, b.seed_generated, 1));
@@ -111,7 +114,7 @@ Test(load, generated_seed) {
 }
 
 Test(load, generated_seed_without_common) {
-  Batch b = load_toml("[[run]]\nalgorithm = \"pso\"\n");
+  Batch b = load_toml("[[run]]\nalgorithm = \"pso\"\niterations = 5\n");
   cr_expect(eq(int, b.seed_generated, 1));
   cr_expect(eq(u32, b.runs[0].cfg.seed, b.seed));
   free_batch(&b);
@@ -122,7 +125,7 @@ Test(load, generated_seed_without_common) {
 // nan in a run turns off what [common] set, for that run only
 Test(load, nan_turns_optional_off) {
   Batch b = load_toml(
-      "[common]\ntarget_fitness = 1.0\n"
+      "[common]\ntarget_fitness = 1.0\niterations = 5\n"
       "[[run]]\nalgorithm = \"pso\"\ntarget_fitness = nan\n"
       "[[run]]\nalgorithm = \"pso\"\n");
   cr_expect(isnan(b.runs[0].cfg.target_fitness));
@@ -135,7 +138,7 @@ Test(load, nan_turns_optional_off) {
 // An unset end of the init range is the domain's
 Test(load, init_range_resolves_to_domain) {
   Batch b = load_toml(
-      "[common]\ndomain_min = -2.0\ndomain_max = 3.0\n"
+      "[common]\ndomain_min = -2.0\ndomain_max = 3.0\niterations = 5\n"
       "[[run]]\nalgorithm = \"pso\"\n"
       "[[run]]\nalgorithm = \"pso\"\ninit_min = 0.0\n");
   cr_expect(eq(dbl, b.runs[0].cfg.init_min, -2.0));

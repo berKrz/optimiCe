@@ -12,22 +12,32 @@ typedef struct FitnessEntry FitnessEntry;  // opaque: defined in fitness.c
 
 typedef enum { MINIMIZE, MAXIMIZE } OptDirection;
 
+// The cap that paces schedules; the other cap, when set, only stops a run early
+typedef enum { BUDGET_ITERATIONS, BUDGET_EVALUATIONS } Budget;
+
+// How the evaluation cap ends the iteration it runs out in: skipping the evaluations past it, or
+// letting the iteration finish
+typedef enum { CUTOFF_EXACT, CUTOFF_ITERATION } EvaluationCutoff;
+
 // The config every algorithm shares. An algorithm's own parameters live in a `_Thread_local cfg`
 // private to its file
 // seed and replicates are batch-wide, but sit here because the field tables write through this
 // struct; load_batch copies both into the Batch
 typedef struct {
-  uint32_t     seed;        // while a job runs, that job's seed
-  int          replicates;  // unused once loaded
-  OptDirection direction;
-  int          n_dims;
-  double       domain_min;
-  double       domain_max;
-  double       init_min;        // range the initial population is drawn from, inside the domain
-  double       init_max;        // NaN until validate resolves an unset end to the domain's
-  int          iterations;      // hard cap on every run
-  double       target_fitness;  // stop once the best reaches it; NaN = off
-  int          stagnation;      // stop after this many iterations without improving; 0 = off
+  uint32_t         seed;        // while a job runs, that job's seed
+  int              replicates;  // unused once loaded
+  OptDirection     direction;
+  int              n_dims;
+  double           domain_min;
+  double           domain_max;
+  double           init_min;     // range the initial population is drawn from, inside the domain
+  double           init_max;     // NaN until validate resolves an unset end to the domain's
+  Budget           budget;       // the cap that paces schedules
+  int              iterations;   // iteration cap; 0 = off unless it's the budget
+  int              evaluations;  // evaluation cap; 0 = off unless it's the budget
+  EvaluationCutoff evaluation_cutoff;  // under CUTOFF_EXACT, evaluate skips calls past the cap
+  double           target_fitness;     // stop once the best reaches it; NaN = off
+  int              stagnation;         // stop after this many iterations without improving; 0 = off
 
   const FitnessEntry* fitness;  // catalog entry; only evaluate calls its function
   const Algorithm*    algorithm;
@@ -119,7 +129,14 @@ int      rng_next_bit(void);
 
 // --- Stopping and the result ---
 
-typedef enum { STOP_NONE, STOP_TARGET, STOP_STAGNATION } StopReason;
+// Why a run stopped; STOP_PENDING while it's still running, never once it has finished
+typedef enum {
+  STOP_PENDING,
+  STOP_TARGET,
+  STOP_STAGNATION,
+  STOP_ITERATIONS,
+  STOP_EVALUATIONS
+} StopReason;
 
 typedef struct {
   double     best;        // best fitness seen by end_iteration over the whole run
@@ -137,12 +154,17 @@ StopState stop_init(void);
 // per-iteration best can get worse
 int end_iteration(StopState* st, double current_best);
 
+// Fraction of the run's budget used, counting the current iteration as underway: in (0, 1], and
+// exactly 1 on the last iteration; call it before end_iteration
+double progress(const StopState* st);
+
 // What a run hands back
 typedef struct {
   double    fitness;      // best fitness found
   double*   pos;          // where: n_dims doubles, owned by the caller
   StopState stop;         // how the run ended
   uint64_t  evaluations;  // calls to evaluate; set by the runner
+  uint64_t  skipped;      // calls past the evaluation cap that evaluate skipped; set by the runner
 } RunResult;
 
 // --- Interactive output ---
@@ -151,10 +173,10 @@ typedef struct {
 
 #define LINE_WIDTH 50
 
-void wait_for_enter(void);              // blocks until the user presses Enter
-void print_separator(void);             // a dashed rule, LINE_WIDTH wide
-void print_iteration_header(int iter);  // "=== Iteration N ===", padded to LINE_WIDTH
-void print_vec(const double* v);        // n_dims values as "[ a b ... ]", no newline
+void wait_for_enter(void);                         // blocks until the user presses Enter
+void print_separator(void);                        // a dashed rule, LINE_WIDTH wide
+void print_iteration_header(const StopState* st);  // "=== Iteration N ===", padded to LINE_WIDTH
+void print_vec(const double* v);                   // n_dims values as "[ a b ... ]", no newline
 
 // --- Config fields ---
 
@@ -219,8 +241,8 @@ typedef struct FieldSpec {
   FIELD_ROW(cfg_type, member, ENUM, SCOPE_ALGO, lookup, default_display, description)
 #define FIELDS_END {NULL, 0, 0, 0, NULL, NULL, NULL}
 
-// One choice of a FIELD_ENUM: the name the user writes, and the enum value stored for it
-// A table of them ends with {NULL, 0}
+// An enum value and its name. A FIELD_ENUM's choices are a table of them, the name being what the
+// user writes; every table ends with {NULL, 0}
 typedef struct {
   const char* name;
   int         value;
@@ -270,3 +292,11 @@ typedef struct Algorithm {
   // Fills out->fitness, out->pos and out->stop. Prints only under --interactive
   void (*run)(RunResult* out);
 } Algorithm;
+
+// --- Must stay last ---
+
+// The budget belongs to the runner: an algorithm leaves its loop through end_iteration and paces
+// its schedules through progress, never reading the caps or the counters itself
+#ifdef OPTIMICE_ALGORITHM_FILE
+#pragma GCC poison budget iterations evaluations evaluation_cutoff
+#endif

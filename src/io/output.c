@@ -155,13 +155,10 @@ void output_open(const Batch* batch, const char* config_path, const char* arg) {
 // Flushed per row, so a batch that dies or is killed leaves every finished row on disk
 void output_row(const char* label, int replicate, uint32_t seed, int n_dims, const RunResult* res) {
   if (!out) return;
-  static const char* const stop_names[] = {
-      [STOP_NONE] = "none", [STOP_TARGET] = "target", [STOP_STAGNATION] = "stagnation"};
-
   char num[FMT_EXACT_LEN];
   fmt_exact(num, res->fitness);
   fprintf(out, "%s,%d,0x%08x,%s,%d,%" PRIu64 ",%s,", label, replicate, seed, num,
-          res->stop.iterations, res->evaluations, stop_names[res->stop.reason]);
+          res->stop.iterations, res->evaluations, enum_name(stop_reason_table, res->stop.reason));
   for (int d = 0; d < n_dims; d++) {
     fmt_exact(num, res->pos[d]);
     fprintf(out, "%s%s", d ? " " : "", num);
