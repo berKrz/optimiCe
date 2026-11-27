@@ -22,6 +22,18 @@ Args parse_args(int argc, char** argv);
 // Parses, merges and validates every [[run]]; the TOML tree is freed on return
 Batch load_batch(const char* filename);
 
+// --- Results ---
+
+// One finished job, as every results writer sees it: built once by the batch runner and handed to
+// the terminal and the results file alike
+typedef struct {
+  const char*      label;      // the run's label, e.g. pso-1
+  int              replicate;  // from 0
+  uint32_t         seed;       // the seed the job ran with
+  int              n_dims;     // length of res->pos
+  const RunResult* res;
+} JobView;
+
 // --- Results file (output.c) ---
 
 // output_open picks the path from `arg`:
@@ -32,7 +44,7 @@ Batch load_batch(const char* filename);
 // output_row writes one job's row. Every write is checked: a failure dies naming the file
 // Without output_open, the other three do nothing
 void output_open(const Batch* batch, const char* config_path, const char* arg);
-void output_row(const char* label, int replicate, uint32_t seed, int n_dims, const RunResult* res);
+void output_row(const JobView* job);
 void output_flush(void);
 void output_close(void);
 
@@ -56,5 +68,4 @@ typedef struct {
 
 void          print_batch_header(const Batch* batch, int n_threads);
 JobLineWidths job_line_widths(const Batch* batch);
-void print_job_line(const JobLineWidths* w, const char* label, int replicate, uint32_t seed,
-                    const RunResult* res);
+void          print_job_line(const JobLineWidths* w, const JobView* job);

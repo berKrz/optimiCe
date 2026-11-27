@@ -50,12 +50,15 @@ typedef struct {
   JobLineWidths    widths;
 } Printer;
 
-// The job's row in the --output file, if any; called right after its terminal line, so both come
-// out in job order
-static void write_job_row(const Batch* batch, int j, const RunResult* res) {
+// Job j's finished result, as the terminal and the results file see it
+static JobView job_view(const Batch* batch, int j, const RunResult* res) {
   const RunConfig* rc = &batch->runs[j / batch->replicates];
   int              r  = j % batch->replicates;
-  output_row(rc->label, r, job_seed(batch, r), rc->cfg.n_dims, res);
+  return (JobView) {.label     = rc->label,
+                    .replicate = r,
+                    .seed      = job_seed(batch, r),
+                    .n_dims    = rc->cfg.n_dims,
+                    .res       = res};
 }
 
 // Marks job j finished and prints every line the cursor can now reach: a line is printed once all
@@ -64,11 +67,12 @@ static void job_finished(Printer* p, int j) {
   const Batch* batch = p->batch;
   int          total = batch_jobs(batch);
   p->done[j]         = 1;
+
   while (p->cursor < total && p->done[p->cursor]) {
-    int r = p->cursor % batch->replicates;
-    print_job_line(&p->widths, batch->runs[p->cursor / batch->replicates].label, r,
-                   job_seed(batch, r), &p->results[p->cursor]);
-    write_job_row(batch, p->cursor, &p->results[p->cursor]);
+    // The job's terminal line, then its row in the --output file, if any: both in job order
+    JobView job = job_view(batch, p->cursor, &p->results[p->cursor]);
+    print_job_line(&p->widths, &job);
+    output_row(&job);
     p->cursor++;
   }
   fflush(stdout);
@@ -155,7 +159,8 @@ void run_batch(const Batch* batch) {
     // Single job: per-iteration output, then the full footer (g_cfg still holds the job's config)
     run_job(batch, 0, &results[0]);
     print_result(&results[0]);
-    write_job_row(batch, 0, &results[0]);
+    JobView job = job_view(batch, 0, &results[0]);
+    output_row(&job);
   } else {
     int n_threads = thread_count(total);
     print_batch_header(batch, n_threads);

@@ -153,16 +153,20 @@ void output_open(const Batch* batch, const char* config_path, const char* arg) {
 // words), so nothing needs quoting. The position's coordinates are separated by spaces, which
 // keeps it one column whatever n_dims is
 // Flushed per row, so a batch that dies or is killed leaves every finished row on disk
-void output_row(const char* label, int replicate, uint32_t seed, int n_dims, const RunResult* res) {
+void output_row(const JobView* job) {
   if (!out) return;
-  char num[FMT_EXACT_LEN];
+  const RunResult* res = job->res;
+  char             num[FMT_EXACT_LEN];
+
   fmt_exact(num, res->fitness);
-  fprintf(out, "%s,%d,0x%08x,%s,%d,%" PRIu64 ",%s,", label, replicate, seed, num,
+  fprintf(out, "%s,%d,0x%08x,%s,%d,%" PRIu64 ",%s,", job->label, job->replicate, job->seed, num,
           res->stop.iterations, res->evaluations, enum_name(stop_reason_table, res->stop.reason));
-  for (int d = 0; d < n_dims; d++) {
+
+  for (int d = 0; d < job->n_dims; d++) {
     fmt_exact(num, res->pos[d]);
     fprintf(out, "%s%s", d ? " " : "", num);
   }
+
   fputc('\n', out);
   output_flush();
 }

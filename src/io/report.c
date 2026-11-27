@@ -111,15 +111,15 @@ JobLineWidths job_line_widths(const Batch* batch) {
   return w;
 }
 
-void print_job_line(const JobLineWidths* w, const char* label, int replicate, uint32_t seed,
-                    const RunResult* res) {
-  char fit[FMT_EXACT_LEN], best[FMT_EXACT_LEN + 8], evals[32];
+void print_job_line(const JobLineWidths* w, const JobView* job) {
+  const RunResult* res = job->res;
+  char             fit[FMT_EXACT_LEN], best[FMT_EXACT_LEN + 8], evals[32];
   fmt_exact(fit, res->fitness);
   snprintf(best, sizeof(best), "best = %s", fit);
   snprintf(evals, sizeof(evals), "evals %" PRIu64, res->evaluations);
 
   // best is padded to its longest form, "best = " and 24 characters: -1.2345678901234567e-308
-  printf("%-*s  r%-*d  seed 0x%08x  %-31s  iters %-*d  ", w->label_w, label, w->rep_w, replicate,
-         seed, best, w->iter_w, res->stop.iterations);
+  printf("%-*s  r%-*d  seed 0x%08x  %-31s  iters %-*d  ", w->label_w, job->label, w->rep_w,
+         job->replicate, job->seed, best, w->iter_w, res->stop.iterations);
   printf("%-16s  %s\n", evals, enum_name(stop_reason_table, res->stop.reason));
 }
