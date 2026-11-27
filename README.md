@@ -1,5 +1,9 @@
 # optimiCe
 
+<p align="center">
+  <img src="docs/assets/optimice-mouse.gif" alt="A white lab mouse running in a purple wheel, chasing cheese on a stick">
+</p>
+
 A runner for metaheuristic optimization algorithms, written in C.
 
 optimiCe runs optimization algorithms against benchmark fitness functions and reports the best solution each run finds. One TOML file describes a whole batch: any number of runs, each with its own algorithm and parameters, repeated over a set number of seeds.

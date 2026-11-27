@@ -10,9 +10,9 @@ optimiCe implements a binary, generational GA (Holland, 1975; Goldberg, 1989) wi
 
 Each individual carries `ind_size` bits per dimension, `n_dims × ind_size` bits in all. A dimension's bits are read as an unsigned integer, its *level*, from 0 to $2^{L} - 1$ with $L$ = `ind_size`, and the levels are spread evenly over the domain: level 0 decodes to `domain_min` and the highest level to `domain_max`. The GA therefore searches a grid of $2^{L}$ values per dimension, and the domain must be finite.
 
-For a dimension at level $\ell$:
+For a dimension at level $\ell$, with $a$ = `domain_min` and $b$ = `domain_max`:
 
-$$x = \text{domain\_min} + \ell \, \frac{\text{domain\_max} - \text{domain\_min}}{2^{L} - 1}$$
+$$x = a + \ell \, \frac{b - a}{2^{L} - 1}$$
 
 Within a dimension, bits are numbered from the least significant, bit 0, to the most significant, bit $L - 1$. The numbering matters for `cut_points`.
 
