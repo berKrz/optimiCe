@@ -119,7 +119,8 @@ int      rng_next_bit(void);
 
 // --- Stopping and the result ---
 
-typedef enum { STOP_NONE, STOP_TARGET, STOP_STAGNATION } StopReason;
+// Why a run stopped; STOP_PENDING while it's still running, never once it has finished
+typedef enum { STOP_PENDING, STOP_TARGET, STOP_STAGNATION, STOP_ITERATIONS } StopReason;
 
 typedef struct {
   double     best;        // best fitness seen by end_iteration over the whole run
@@ -155,10 +156,10 @@ typedef struct {
 
 #define LINE_WIDTH 50
 
-void wait_for_enter(void);              // blocks until the user presses Enter
-void print_separator(void);             // a dashed rule, LINE_WIDTH wide
-void print_iteration_header(int iter);  // "=== Iteration N ===", padded to LINE_WIDTH
-void print_vec(const double* v);        // n_dims values as "[ a b ... ]", no newline
+void wait_for_enter(void);                         // blocks until the user presses Enter
+void print_separator(void);                        // a dashed rule, LINE_WIDTH wide
+void print_iteration_header(const StopState* st);  // "=== Iteration N ===", padded to LINE_WIDTH
+void print_vec(const double* v);                   // n_dims values as "[ a b ... ]", no newline
 
 // --- Config fields ---
 
@@ -223,8 +224,8 @@ typedef struct FieldSpec {
   FIELD_ROW(cfg_type, member, ENUM, SCOPE_ALGO, lookup, default_display, description)
 #define FIELDS_END {NULL, 0, 0, 0, NULL, NULL, NULL}
 
-// One choice of a FIELD_ENUM: the name the user writes, and the enum value stored for it
-// A table of them ends with {NULL, 0}
+// An enum value and its name. A FIELD_ENUM's choices are a table of them, the name being what the
+// user writes; every table ends with {NULL, 0}
 typedef struct {
   const char* name;
   int         value;
@@ -274,3 +275,11 @@ typedef struct Algorithm {
   // Fills out->fitness, out->pos and out->stop. Prints only under --interactive
   void (*run)(RunResult* out);
 } Algorithm;
+
+// --- Must stay last ---
+
+// The budget belongs to the runner: an algorithm leaves its loop through end_iteration and paces
+// its schedules through progress, never reading the caps or the counters itself
+#ifdef OPTIMICE_ALGORITHM_FILE
+#pragma GCC poison iterations evaluations
+#endif

@@ -271,12 +271,12 @@ static void pso_run(RunResult* out) {
 
   StopState stop       = stop_init();
   swarm.first_progress = progress(&stop);
-  for (int i = 0; i < g_cfg.iterations; i++) {
+  for (;;) {
     double w = inertia(progress(&stop), swarm.first_progress);
     update_swarm(&swarm, w);
 
     if (g_opts.interactive) {
-      print_iteration_header(i);
+      print_iteration_header(&stop);
       if (cfg.w_end != cfg.w) printf("w = %g\n\n", w);
       show_swarm(&swarm);
     }

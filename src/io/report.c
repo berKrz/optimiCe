@@ -17,9 +17,9 @@ void print_separator(void) {
   printf("\n\n");
 }
 
-void print_iteration_header(int iter) {
+void print_iteration_header(const StopState* st) {
   char buf[32];
-  int  n = snprintf(buf, sizeof(buf), "=== Iteration %d ", iter);
+  int  n = snprintf(buf, sizeof(buf), "=== Iteration %d ", st->iterations);
   printf("%s", buf);
   for (int i = n; i < LINE_WIDTH; i++) printf("=");
   printf("\n\n");
@@ -108,9 +108,7 @@ void print_job_line(const JobLineWidths* w, const char* label, int replicate, ui
   // best is padded to its longest form, "best = " and 24 characters: -1.2345678901234567e-308
   printf("%-*s  r%-*d  seed 0x%08x  %-31s  iters %-*d  ", w->label_w, label, w->rep_w, replicate,
          seed, best, w->iter_w, res->stop.iterations);
-  switch (res->stop.reason) {
-    case STOP_NONE:       printf("%s\n", evals); break;
-    case STOP_TARGET:     printf("%-16s  target\n", evals); break;
-    case STOP_STAGNATION: printf("%-16s  stagnation\n", evals); break;
-  }
+  // No note for a run that used its whole budget
+  if (res->stop.reason == STOP_ITERATIONS) printf("%s\n", evals);
+  else printf("%-16s  %s\n", evals, enum_name(stop_reason_table, res->stop.reason));
 }

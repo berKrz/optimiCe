@@ -213,12 +213,12 @@ static void sma_run(RunResult* out) {
   }
 
   StopState stop = stop_init();
-  for (int i = 0; i < g_cfg.iterations; i++) {
+  for (;;) {
     update_weights(&pop);
     move_slimes(&pop, progress(&stop));
 
     if (g_opts.interactive) {
-      print_iteration_header(i);
+      print_iteration_header(&stop);
       show_population(&pop);
     }
     if (end_iteration(&stop, pop.best_fitness)) break;

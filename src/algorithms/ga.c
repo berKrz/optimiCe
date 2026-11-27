@@ -644,8 +644,8 @@ static void ga_run(RunResult* out) {
   }
 
   StopState stop = stop_init();
-  for (int i = 0; i < g_cfg.iterations; i++) {
-    if (g_opts.interactive) print_iteration_header(i);
+  for (;;) {
+    if (g_opts.interactive) print_iteration_header(&stop);
     select_parents(&pop);
     if (g_opts.interactive) show_pairs(&pop);
 

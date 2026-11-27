@@ -49,7 +49,8 @@ static void check_run(const Algorithm* algo, const char* extra) {
               "%s: pos[%d] = %g is outside the domain", what, d, first.pos[d]);
   cr_expect(eq(dbl, evaluate(first.pos), first.fitness), "%s: fitness isn't the position's", what);
   cr_expect(first.stop.iterations <= ITERATIONS, "%s: over budget", what);
-  if (first.stop.reason == STOP_NONE)
+  cr_expect(ne(int, first.stop.reason, STOP_PENDING), "%s: finished with no reason", what);
+  if (first.stop.reason == STOP_ITERATIONS)
     cr_expect(eq(int, first.stop.iterations, ITERATIONS), "%s: stopped early, no reason", what);
 
   free(first.pos);

@@ -40,6 +40,11 @@ void fitness_limits_text(const FitnessEntry* entry, char* dims, char* domain);
 // Prints the catalog for --list: one line per function, its name and its limits
 void fitness_print_catalog(void);
 
+// --- Stopping (stop.c) ---
+
+// A finished run's reason, by the name output uses
+extern const EnumEntry stop_reason_table[];
+
 // --- Random numbers (rng.c) ---
 
 // rng_init seeds the calling thread's stream; rng_generate_seed picks a seed (time ^ pid) for a
