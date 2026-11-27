@@ -35,6 +35,7 @@ UNITTEST void run_job(const Batch* batch, int j, RunResult* out) {
   evaluations_reset();
   rc->cfg.algorithm->run(out);
   out->evaluations = evaluations();
+  out->skipped     = evaluations_skipped();
   g_where          = NULL;
 }
 

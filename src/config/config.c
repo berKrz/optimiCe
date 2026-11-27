@@ -21,6 +21,12 @@ static const EnumEntry budget_table[] = {
     {NULL,          0                 },
 };
 
+static const EnumEntry cutoff_table[] = {
+    {"exact",     CUTOFF_EXACT    },
+    {"iteration", CUTOFF_ITERATION},
+    {NULL,        0               },
+};
+
 // --- Runner field table ---
 
 // Row order is --help order: [common]-only fields first, [[run]]-only last
@@ -39,6 +45,9 @@ const FieldSpec runner_fields[] = {
               "Iteration cap (generations, for GA); 0 = off, unless it's the budget"),
     FIELD_ROW(Config, evaluations, INT, SCOPE_GLOBAL, NULL, "0",
               "Fitness evaluation cap; 0 = off, unless it's the budget"),
+    FIELD_ROW(Config, evaluation_cutoff, ENUM, SCOPE_GLOBAL, cutoff_table, "exact",
+              "How the evaluation cap ends its last iteration: skip the evaluations past it, or "
+              "finish the iteration"),
     FIELD_ROW(Config, target_fitness, DOUBLE, SCOPE_GLOBAL, NULL, "nan",
               "Stop early once the best is at least this good"),
     FIELD_ROW(Config, stagnation, INT, SCOPE_GLOBAL, NULL, "0",

@@ -66,7 +66,11 @@ void print_result(const RunResult* r) {
     printf("Stopped early: evaluation cap of %d reached\n\n", g_cfg.evaluations);
 
   printf("Iterations: %d\n", r->stop.iterations);
-  printf("Evaluations: %" PRIu64 "\n", r->evaluations);
+  printf("Evaluations: %" PRIu64, r->evaluations);
+  if (r->skipped > 0)
+    printf(" (%" PRIu64 " skipped: the %s ran out mid-iteration)", r->skipped,
+           g_cfg.budget == BUDGET_EVALUATIONS ? "budget" : "evaluation cap");
+  printf("\n");
   printf("Algorithm: %s    Seed: 0x%08x\n", g_cfg.algorithm->name, g_cfg.seed);
   for (int i = 0; i < LINE_WIDTH; i++) printf("=");
   printf("\n");

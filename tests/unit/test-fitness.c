@@ -23,6 +23,42 @@ static double eval_at(const char* name, const double* pos, int n_dims) {
 // Exact up to rounding in the function's own arithmetic
 #define TOL 1e-12
 
+// --- Evaluation cap ---
+
+// Under the exact cutoff, calls past the cap get the worst fitness and aren't counted
+Test(fitness, exact_cutoff_skips_past_cap) {
+  g_cfg_rw.direction   = MINIMIZE;
+  g_cfg_rw.evaluations = 3;
+  for (int i = 0; i < 3; i++) cr_expect(eq(dbl, EVAL("sphere", 1, 2, 3), 14.0));
+  cr_expect(eq(dbl, EVAL("sphere", 1, 2, 3), INFINITY));
+  cr_expect(eq(dbl, EVAL("sphere", 1, 2, 3), INFINITY));
+  cr_expect(eq(u64, evaluations(), 3));
+  cr_expect(eq(u64, evaluations_skipped(), 2));
+}
+
+Test(fitness, exact_cutoff_worst_when_maximizing) {
+  g_cfg_rw.direction   = MAXIMIZE;
+  g_cfg_rw.evaluations = 1;
+  EVAL("sphere", 1, 2, 3);
+  cr_expect(eq(dbl, EVAL("sphere", 1, 2, 3), -INFINITY));
+}
+
+// Under the iteration cutoff, calls past the cap are made and counted: the iteration finishes
+Test(fitness, iteration_cutoff_keeps_evaluating) {
+  g_cfg_rw.evaluation_cutoff = CUTOFF_ITERATION;
+  g_cfg_rw.evaluations       = 3;
+  for (int i = 0; i < 5; i++) cr_expect(eq(dbl, EVAL("sphere", 1, 2, 3), 14.0));
+  cr_expect(eq(u64, evaluations(), 5));
+  cr_expect(eq(u64, evaluations_skipped(), 0));
+}
+
+// With no evaluation cap, nothing is ever skipped
+Test(fitness, no_cap_no_cutoff) {
+  g_cfg_rw.evaluations = 0;
+  for (int i = 0; i < 100; i++) cr_expect(eq(dbl, EVAL("sphere", 1, 2, 3), 14.0));
+  cr_expect(eq(u64, evaluations_skipped(), 0));
+}
+
 // --- Known values ---
 
 Test(fitness, sphere) {

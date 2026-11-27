@@ -163,6 +163,36 @@ begin "footer: evaluation cap before an iteration budget"
 one_run sma "$(printf 'iterations = 1000\nevaluations = 100')"
 footer_case "Stopped early: evaluation cap of 100 reached"
 
+# The exact cutoff's skipped evaluations show on the footer's evaluations line, and only when
+# there are any: sma's 30 slimes evaluate 30 per iteration, setup included
+skipped_case() {
+  run -f case.toml
+  got=$(grep '^Evaluations' "$out")
+  if [ "$status" -ne 0 ]; then
+    { echo "exit status $status, expected 0"; cat "$err"; } | fail
+  elif [ "$got" != "$1" ]; then
+    echo "expected '$1', got '$got'" | fail
+  else
+    pass
+  fi
+}
+
+begin "footer: evaluations skipped mid-iteration"
+one_run sma "$(printf 'budget = "evaluations"\nevaluations = 100\niterations = 0\npop_size = 30')"
+skipped_case "Evaluations: 100 (20 skipped: the budget ran out mid-iteration)"
+
+begin "footer: evaluation cap skipping before an iteration budget"
+one_run sma "$(printf 'iterations = 1000\nevaluations = 100\npop_size = 30')"
+skipped_case "Evaluations: 100 (20 skipped: the evaluation cap ran out mid-iteration)"
+
+begin "footer: no skipped note when the budget divides evenly"
+one_run sma "$(printf 'budget = "evaluations"\nevaluations = 90\niterations = 0\npop_size = 30')"
+skipped_case "Evaluations: 90"
+
+begin "footer: no skipped note under the iteration cutoff"
+one_run sma "$(printf 'budget = "evaluations"\nevaluations = 100\niterations = 0\npop_size = 30\nevaluation_cutoff = "iteration"')"
+skipped_case "Evaluations: 120"
+
 # --- --dump-config ---
 
 begin "generated seed marked as such"

@@ -15,24 +15,29 @@ typedef enum { MINIMIZE, MAXIMIZE } OptDirection;
 // The cap that paces schedules; the other cap, when set, only stops a run early
 typedef enum { BUDGET_ITERATIONS, BUDGET_EVALUATIONS } Budget;
 
+// How the evaluation cap ends the iteration it runs out in: skipping the evaluations past it, or
+// letting the iteration finish
+typedef enum { CUTOFF_EXACT, CUTOFF_ITERATION } EvaluationCutoff;
+
 // The config every algorithm shares. An algorithm's own parameters live in a `_Thread_local cfg`
 // private to its file
 // seed and replicates are batch-wide, but sit here because the field tables write through this
 // struct; load_batch copies both into the Batch
 typedef struct {
-  uint32_t     seed;        // while a job runs, that job's seed
-  int          replicates;  // unused once loaded
-  OptDirection direction;
-  int          n_dims;
-  double       domain_min;
-  double       domain_max;
-  double       init_min;        // range the initial population is drawn from, inside the domain
-  double       init_max;        // NaN until validate resolves an unset end to the domain's
-  Budget       budget;          // the cap that paces schedules
-  int          iterations;      // iteration cap; 0 = off unless it's the budget
-  int          evaluations;     // evaluation cap; 0 = off unless it's the budget
-  double       target_fitness;  // stop once the best reaches it; NaN = off
-  int          stagnation;      // stop after this many iterations without improving; 0 = off
+  uint32_t         seed;        // while a job runs, that job's seed
+  int              replicates;  // unused once loaded
+  OptDirection     direction;
+  int              n_dims;
+  double           domain_min;
+  double           domain_max;
+  double           init_min;     // range the initial population is drawn from, inside the domain
+  double           init_max;     // NaN until validate resolves an unset end to the domain's
+  Budget           budget;       // the cap that paces schedules
+  int              iterations;   // iteration cap; 0 = off unless it's the budget
+  int              evaluations;  // evaluation cap; 0 = off unless it's the budget
+  EvaluationCutoff evaluation_cutoff;  // under CUTOFF_EXACT, evaluate skips calls past the cap
+  double           target_fitness;     // stop once the best reaches it; NaN = off
+  int              stagnation;         // stop after this many iterations without improving; 0 = off
 
   const FitnessEntry* fitness;  // catalog entry; only evaluate calls its function
   const Algorithm*    algorithm;
@@ -159,6 +164,7 @@ typedef struct {
   double*   pos;          // where: n_dims doubles, owned by the caller
   StopState stop;         // how the run ended
   uint64_t  evaluations;  // calls to evaluate; set by the runner
+  uint64_t  skipped;      // calls past the evaluation cap that evaluate skipped; set by the runner
 } RunResult;
 
 // --- Interactive output ---
@@ -292,5 +298,5 @@ typedef struct Algorithm {
 // The budget belongs to the runner: an algorithm leaves its loop through end_iteration and paces
 // its schedules through progress, never reading the caps or the counters itself
 #ifdef OPTIMICE_ALGORITHM_FILE
-#pragma GCC poison budget iterations evaluations
+#pragma GCC poison budget iterations evaluations evaluation_cutoff
 #endif

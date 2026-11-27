@@ -153,6 +153,7 @@ A value in `[[run]]` overrides the one in `[common]`.
 | `budget` | enum | `iterations` | `iterations`, `evaluations` | Which cap paces schedules; the other, when set, only stops a run early |
 | `iterations` | int | `0` |  | Iteration cap (generations, for GA); 0 = off, unless it's the budget |
 | `evaluations` | int | `0` |  | Fitness evaluation cap; 0 = off, unless it's the budget |
+| `evaluation_cutoff` | enum | `exact` | `exact`, `iteration` | How the evaluation cap ends its last iteration: skip the evaluations past it, or finish the iteration |
 | `target_fitness` | float | (unset) |  | Stop early once the best is at least this good |
 | `stagnation` | int | `0` |  | Stop early after this many iterations without improving (0 = off) |
 | `domain_min` | float | `-5.0` |  | Lower bound of every dimension (-inf = unbounded below) |
