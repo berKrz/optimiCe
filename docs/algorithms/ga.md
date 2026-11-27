@@ -22,6 +22,8 @@ When the init range is the whole domain, every bit of every individual is drawn 
 
 ### Each generation
 
+A generation is one of the runner's iterations: `iterations` counts generations, and so do the progress lines and the result.
+
 1. **Selection.** `pop_size` parents are drawn from the population, with repetition, by the `selection` operator. Parents keep the fitness they already have, so selection costs no evaluations.
 2. **Crossover.** The selected parents are paired in order, first with second, third with fourth, and so on, and every pair is crossed by the `crossover` operator; there is no crossover probability. When `pop_size` is odd, the last individual has no partner and is only mutated.
 3. **Mutation.** Every bit of every child flips with probability `mutation_rate`.
